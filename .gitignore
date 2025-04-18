@@ -1,3 +1,6 @@
 #Omit local executable paths.
 mc
 mc_file_sys
+
+#Omit VSCode settings.
+.vscode/

@@ -11,7 +11,7 @@
 
 // Libraries: configuration and header files
 
-#define FUSE_USE_VERSION 30
+#define FUSE_USE_VERSION 35
 
 #include <fuse.h>
 #include <stdio.h>
@@ -231,20 +231,41 @@ static int do_chmod(const char *path, mode_t mode)
 	return 0;
 }
 
+static int do_flush(const char *path, struct fuse_file_info *info)
+{
+	// TODO: implement
+	return -1;
+}
+
+static int do_access(const char *path, int perms)
+{
+	// TODO: implement null version of this?
+	return -1;
+}
+
+static int do_release(const char *path, struct fuse_file_info *info)
+{
+	// TODO: implement
+	do_flush(path, info);
+	return -1;
+}
+
 static struct fuse_operations operations = {
+	.access = do_access,
+	.chmod = do_chmod,
 	.getattr = do_getattr,
-	.readdir = do_readdir,
-	.read = do_read,
 	.mkdir = do_mkdir,
 	.mknod = do_mknod,
-	.write = do_write,
-	.unlink = do_unlink,
-	.rmdir = do_rmdir,
+	.readdir = do_readdir,
 	.rename = do_rename,
-	.chmod = do_chmod,
+	.rmdir = do_rmdir,
+	.read = do_read,
+	.unlink = do_unlink,
+	.write = do_write,
 };
 
 int main(int argc, char *argv[])
 {
+	struct fuse_operations ops;
 	return fuse_main(argc, argv, &operations, NULL);
 }
