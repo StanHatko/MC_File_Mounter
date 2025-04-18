@@ -38,7 +38,7 @@ int curr_file_idx = -1;
 char files_content[256][256];
 int curr_file_content_idx = -1;
 
-// Implementations of all necessary functions
+// Implementations of internal functions.
 
 void add_dir(const char *dir_name)
 {
@@ -110,7 +110,25 @@ void write_to_file(const char *path, const char *new_content)
 	strcpy(files_content[file_idx], new_content);
 }
 
-// ... //
+// Implementations of necessary FUSE functions
+
+static int do_access(const char *path, int perms)
+{
+	// TODO: implement null version of this?
+	return -1;
+}
+
+static int do_chmod(const char *path, mode_t mode)
+{
+	// No-op implementation.
+	return 0;
+}
+
+static int do_flush(const char *path, struct fuse_file_info *info)
+{
+	// TODO: implement
+	return -1;
+}
 
 static int do_getattr(const char *path, struct stat *st)
 {
@@ -141,42 +159,6 @@ static int do_getattr(const char *path, struct stat *st)
 	return 0;
 }
 
-static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-
-	filler(buffer, ".", NULL, 0);  // Current Directory
-	filler(buffer, "..", NULL, 0); // Parent Directory
-
-	if (strcmp(path, "/") == 0) // If the user is trying to show the files/directories of the root directory show the following
-	{
-		for (int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++)
-			filler(buffer, dir_list[curr_idx], NULL, 0);
-
-		for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
-			filler(buffer, files_list[curr_idx], NULL, 0);
-	}
-
-	return 0;
-}
-
-static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	int file_idx = get_file_index(path);
-
-	if (file_idx == -1)
-		return -1;
-
-	char *content = files_content[file_idx];
-
-	memcpy(buffer, content + offset, size);
-
-	return strlen(content) - offset;
-}
-
 static int do_mkdir(const char *path, mode_t mode)
 {
 	// Sample implementation.
@@ -197,24 +179,46 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 	return 0;
 }
 
-static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
+static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	// Sample implementation.
 	// TODO: REPLACE
-	write_to_file(path, buffer);
+	int file_idx = get_file_index(path);
 
-	return size;
+	if (file_idx == -1)
+		return -1;
+
+	char *content = files_content[file_idx];
+
+	memcpy(buffer, content + offset, size);
+
+	return strlen(content) - offset;
 }
 
-static int do_unlink(const char *path)
+static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-	// TODO: implement
-	return -1;
+	// Sample implementation.
+	// TODO: REPLACE
+
+	filler(buffer, ".", NULL, 0);  // Current Directory
+	filler(buffer, "..", NULL, 0); // Parent Directory
+
+	if (strcmp(path, "/") == 0) // If the user is trying to show the files/directories of the root directory show the following
+	{
+		for (int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++)
+			filler(buffer, dir_list[curr_idx], NULL, 0);
+
+		for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
+			filler(buffer, files_list[curr_idx], NULL, 0);
+	}
+
+	return 0;
 }
 
-static int do_rmdir(const char *path)
+static int do_release(const char *path, struct fuse_file_info *info)
 {
 	// TODO: implement
+	do_flush(path, info);
 	return -1;
 }
 
@@ -225,47 +229,45 @@ static int do_rename(const char *source_path, const char *dest_path)
 	return -1;
 }
 
-static int do_chmod(const char *path, mode_t mode)
-{
-	// No-op implementation.
-	return 0;
-}
-
-static int do_flush(const char *path, struct fuse_file_info *info)
+static int do_rmdir(const char *path)
 {
 	// TODO: implement
 	return -1;
 }
 
-static int do_access(const char *path, int perms)
-{
-	// TODO: implement null version of this?
-	return -1;
-}
-
-static int do_release(const char *path, struct fuse_file_info *info)
+static int do_unlink(const char *path)
 {
 	// TODO: implement
-	do_flush(path, info);
 	return -1;
 }
 
+static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
+{
+	// Sample implementation.
+	// TODO: REPLACE
+	write_to_file(path, buffer);
+
+	return size;
+}
+
+// Structure with functions for necessary operations.
 static struct fuse_operations operations = {
 	.access = do_access,
 	.chmod = do_chmod,
 	.getattr = do_getattr,
 	.mkdir = do_mkdir,
 	.mknod = do_mknod,
+	.read = do_read,
 	.readdir = do_readdir,
 	.rename = do_rename,
+	.release = do_release,
 	.rmdir = do_rmdir,
-	.read = do_read,
 	.unlink = do_unlink,
 	.write = do_write,
 };
 
+// Main run function.
 int main(int argc, char *argv[])
 {
-	struct fuse_operations ops;
 	return fuse_main(argc, argv, &operations, NULL);
 }
