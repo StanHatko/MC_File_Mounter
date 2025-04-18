@@ -42,12 +42,16 @@ int curr_file_content_idx = -1;
 
 void add_dir(const char *dir_name)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	curr_dir_idx++;
 	strcpy(dir_list[curr_dir_idx], dir_name);
 }
 
 int is_dir(const char *path)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	path++; // Eliminating "/" in the path
 
 	for (int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++)
@@ -59,6 +63,8 @@ int is_dir(const char *path)
 
 void add_file(const char *filename)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	curr_file_idx++;
 	strcpy(files_list[curr_file_idx], filename);
 
@@ -68,6 +74,8 @@ void add_file(const char *filename)
 
 int is_file(const char *path)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	path++; // Eliminating "/" in the path
 
 	for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
@@ -79,6 +87,8 @@ int is_file(const char *path)
 
 int get_file_index(const char *path)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	path++; // Eliminating "/" in the path
 
 	for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
@@ -90,6 +100,8 @@ int get_file_index(const char *path)
 
 void write_to_file(const char *path, const char *new_content)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	int file_idx = get_file_index(path);
 
 	if (file_idx == -1) // No such file
@@ -102,6 +114,9 @@ void write_to_file(const char *path, const char *new_content)
 
 static int do_getattr(const char *path, struct stat *st)
 {
+	// Sample implementation.
+	// TODO: REPLACE
+
 	st->st_uid = getuid();	   // The owner of the file/directory is the user who mounted the filesystem
 	st->st_gid = getgid();	   // The group of the file/directory is the same as the group of the user who mounted the filesystem
 	st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
@@ -128,6 +143,9 @@ static int do_getattr(const char *path, struct stat *st)
 
 static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+	// Sample implementation.
+	// TODO: REPLACE
+
 	filler(buffer, ".", NULL, 0);  // Current Directory
 	filler(buffer, "..", NULL, 0); // Parent Directory
 
@@ -145,6 +163,8 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	int file_idx = get_file_index(path);
 
 	if (file_idx == -1)
@@ -159,6 +179,8 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 
 static int do_mkdir(const char *path, mode_t mode)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	path++;
 	add_dir(path);
 
@@ -167,6 +189,8 @@ static int do_mkdir(const char *path, mode_t mode)
 
 static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	path++;
 	add_file(path);
 
@@ -175,9 +199,36 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 
 static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
 {
+	// Sample implementation.
+	// TODO: REPLACE
 	write_to_file(path, buffer);
 
 	return size;
+}
+
+static int do_unlink(const char *path)
+{
+	// TODO: implement
+	return -1;
+}
+
+static int do_rmdir(const char *path)
+{
+	// TODO: implement
+	return -1;
+}
+
+static int do_rename(const char *source_path, const char *dest_path)
+{
+	// TODO: implement
+	// Not real rename with mc commands!
+	return -1;
+}
+
+static int do_chmod(const char *path, mode_t mode)
+{
+	// No-op implementation.
+	return 0;
 }
 
 static struct fuse_operations operations = {
@@ -187,6 +238,10 @@ static struct fuse_operations operations = {
 	.mkdir = do_mkdir,
 	.mknod = do_mknod,
 	.write = do_write,
+	.unlink = do_unlink,
+	.rmdir = do_rmdir,
+	.rename = do_rename,
+	.chmod = do_chmod,
 };
 
 int main(int argc, char *argv[])

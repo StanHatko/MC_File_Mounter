@@ -1,2 +1,3 @@
-#Omit local mc executable path.
+#Omit local executable paths.
 mc
+mc_file_sys
