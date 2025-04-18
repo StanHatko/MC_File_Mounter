@@ -1,5 +1,5 @@
 /**
- * Mount file system that can be accessed using mc command.
+ * Mount file system that can be accessed using MinIO mc command.
  * For now still mostly sample code, need to implement methods.
  * By Stan Hatko
  *
@@ -9,10 +9,13 @@
  * License: GNU GPL
  */
 
+// Libraries: configuration and header files
+
 #define FUSE_USE_VERSION 30
 
 #include <fuse.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <time.h>
@@ -20,7 +23,11 @@
 #include <stdlib.h>
 #include <errno.h>
 
-// ... //
+// Program configuration
+
+#define MC_PATH "./mc"
+
+// Global vars
 
 char dir_list[256][256];
 int curr_dir_idx = -1;
@@ -30,6 +37,8 @@ int curr_file_idx = -1;
 
 char files_content[256][256];
 int curr_file_content_idx = -1;
+
+// Implementations of all necessary functions
 
 void add_dir(const char *dir_name)
 {
