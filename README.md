@@ -1,6 +1,8 @@
-Less Simple, Yet Stupid Filesystem (Using FUSE)
+[DRAFT] Implementation of Filesystem Mount for S3 Accessible with mc Command
 =======================================
 
-This is an example of using FUSE to build a simple in-memory filesystem that supports creating new files and directories. It is a part of a tutorial in MQH Blog with the title "Writing Less Simple, Yet Stupid Filesystem Using FUSE in C": <http://maastaar.net/fuse/linux/filesystem/c/2019/09/28/writing-less-simple-yet-stupid-filesystem-using-FUSE-in-C/>
+This is an implementation of mounting a filesystem with FUSE for an S3-compatible folder accessible using the mc command.
+Based on sample FUSE repo https://github.com/MaaSTaaR/LSYSFS.
+Most of the actual methods haven't been implemented yet.
 
 License: GNU GPL.
