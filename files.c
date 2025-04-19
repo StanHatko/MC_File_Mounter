@@ -61,6 +61,7 @@ int file_list_add(const char *mc_filename)
         s->is_init = false;
         pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
         s->lock = lock;
+        pthread_mutex_lock(&(s->lock));
 
         // Return entry for file.
         pthread_mutex_unlock(&file_list_lock);
@@ -79,27 +80,35 @@ uint64_t get_temp_file_num()
     pthread_mutex_lock(&file_list_lock);
     cur_num += 1;
     pthread_mutex_unlock(&file_list_lock);
-    return cur_num
+    return cur_num;
 }
 
-// Open specified file, copying from source.
-// Used for read, append, and combined operations with read.
-int open_file_with_copy(int entry)
+// Initialize specified file, option for copying from source or create new.
+int init_file(int entry, bool create_new)
 {
-    pthread_mutex_lock(&(files_list[entry].lock));
-    // TODO implement!
-    pthread_mutex_unlock(&(files_list[entry].lock));
-    return 0;
-}
+    // File entry to initialize.
+    struct open_file_entry *s = &(files_list[entry]);
 
-// Open specified file, without copying from source.
-// Only used for write.
-int open_file_new(int entry)
-{
-    pthread_mutex_lock(&(files_list[entry].lock));
-    sprintf(files_list[entry].local_filename, TEMP_FILE_PREFIX PRIu64 ".temp", get_temp_file_num());
-    files_list[entry].file = fopen(files_list[entry].local_filename, "w+b");
-    files_list[entry].is_init = true;
+    // Get name of temporary file to use.
+    char *temp_filename = s->local_filename;
+    sprintf(temp_filename, TEMP_PATH_FILES_PREFIX "%" PRIu64 ".temp", get_temp_file_num());
+
+    if (create_new)
+    {
+        // Create brand new file, no copy from source.
+        s->file = fopen(temp_filename, "w+b");
+    }
+    else
+    {
+        // Need to copy from source.
+        // TODO implement
+    }
+
+    // Do rest of initialization.
+    s->is_init = true;
+    s->need_copy_end = create_new; // can set this later, for append and mixed read/write
+
+    // Done initialization.
     pthread_mutex_unlock(&(files_list[entry].lock));
     return 0;
 }
