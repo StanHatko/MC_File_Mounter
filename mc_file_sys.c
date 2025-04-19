@@ -40,6 +40,11 @@ int curr_file_content_idx = -1;
 
 // Implementations of internal functions.
 
+void log_operation(const char *op_name)
+{
+	fprintf(stderr, "Perform operation: %s\n", op_name);
+}
+
 void add_dir(const char *dir_name)
 {
 	// Sample implementation.
@@ -114,24 +119,28 @@ void write_to_file(const char *path, const char *new_content)
 
 static int do_access(const char *path, int perms)
 {
+	log_operation("access");
 	// TODO: implement null version of this?
 	return -1;
 }
 
 static int do_chmod(const char *path, mode_t mode)
 {
+	log_operation("chmod");
 	// No-op implementation.
 	return 0;
 }
 
 static int do_flush(const char *path, struct fuse_file_info *info)
 {
+	log_operation("flush");
 	// TODO: implement
 	return -1;
 }
 
 static int do_getattr(const char *path, struct stat *st)
 {
+	log_operation("getattr");
 	// Sample implementation.
 	// TODO: REPLACE
 
@@ -161,6 +170,7 @@ static int do_getattr(const char *path, struct stat *st)
 
 static int do_mkdir(const char *path, mode_t mode)
 {
+	log_operation("mkdir");
 	// Sample implementation.
 	// TODO: REPLACE
 	path++;
@@ -171,6 +181,7 @@ static int do_mkdir(const char *path, mode_t mode)
 
 static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+	log_operation("mknod");
 	// Sample implementation.
 	// TODO: REPLACE
 	path++;
@@ -181,6 +192,7 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+	log_operation("read");
 	// Sample implementation.
 	// TODO: REPLACE
 	int file_idx = get_file_index(path);
@@ -197,6 +209,7 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 
 static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+	log_operation("readdir");
 	// Sample implementation.
 	// TODO: REPLACE
 
@@ -217,6 +230,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 
 static int do_release(const char *path, struct fuse_file_info *info)
 {
+	log_operation("release");
 	// TODO: implement
 	do_flush(path, info);
 	return -1;
@@ -224,6 +238,7 @@ static int do_release(const char *path, struct fuse_file_info *info)
 
 static int do_rename(const char *source_path, const char *dest_path)
 {
+	log_operation("rename");
 	// TODO: implement
 	// Not real rename with mc commands!
 	return -1;
@@ -231,18 +246,21 @@ static int do_rename(const char *source_path, const char *dest_path)
 
 static int do_rmdir(const char *path)
 {
+	log_operation("rmdir");
 	// TODO: implement
 	return -1;
 }
 
 static int do_unlink(const char *path)
 {
+	log_operation("unlink");
 	// TODO: implement
 	return -1;
 }
 
 static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
 {
+	log_operation("write");
 	// Sample implementation.
 	// TODO: REPLACE
 	write_to_file(path, buffer);
