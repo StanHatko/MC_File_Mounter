@@ -1,11 +1,11 @@
 /**
- * Maintain list of currently open files implementation.
+ * Maintain list and contents of currently open files implementation.
  * By Stan Hatko
  *
  * License: GNU GPL
  */
 
-#include "file_list.h"
+#include "files.h"
 
 static struct open_file_entry list_open_files[MAX_OPEN_FILES];
 static pthread_mutex_t open_file_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -56,13 +56,18 @@ int file_list_add(const char *mc_filename)
             continue;
 
         // Found entry that's available.
-        // Earlier validated that mc_filename is not too long.
-        strcpy(s->mc_filename, mc_filename);
+        strcpy(s->mc_filename, mc_filename); // Earlier validated that mc_filename is not too long.
         s->is_active = true;
         s->is_init = false;
+        pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+        s->lock = lock;
+
+        // Return entry for file.
+        pthread_mutex_unlock(&open_file_lock);
+        return i;
     }
 
     // Failed since no available entries.
     pthread_mutex_unlock(&open_file_lock);
-    return r;
+    return -1;
 }

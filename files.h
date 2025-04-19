@@ -1,5 +1,5 @@
 /**
- * Maintain list of currently open files header file.
+ * Maintain list and contents of currently open files header file.
  * By Stan Hatko
  *
  * License: GNU GPL
@@ -19,7 +19,7 @@ struct open_file_entry
     char mc_filename[MC_PATH_BUF_LEN];
     char local_filename[TEMP_PATH_BUF_LEN];
     int handles_count;
-    pthread_mutex_t is_locked;
+    pthread_mutex_t lock;
     bool is_active;
     bool is_init;
     bool need_copy_end;

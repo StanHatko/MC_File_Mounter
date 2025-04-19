@@ -2,7 +2,7 @@
 mc
 mc_file_sys
 request_handler
-file_list.o
+files.o
 
 #Omit VSCode settings.
 .vscode/
