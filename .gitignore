@@ -1,6 +1,7 @@
 #Omit local executable paths.
 mc
 mc_file_sys
+request_handler
 
 #Omit VSCode settings.
 .vscode/
