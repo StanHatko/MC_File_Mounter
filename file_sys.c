@@ -54,9 +54,19 @@ static int do_getattr(const char *path, struct stat *st)
 	st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
 	st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
 
-	st->st_mode = 040777;
-	st->st_nlink = 1;
-	st->st_size = 1024;
+	if (strcmp(path, "/") == 0) // TODO: ADD support for subdirectories
+	{
+		st->st_mode = 040777;
+		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
+	}
+	else
+	{
+		st->st_mode = 0100777;
+		st->st_nlink = 1;
+		st->st_size = 1024;
+	}
+
+	return 0;
 
 #if 0
 	if (strcmp(path, "/") == 0 || is_dir(path) == 1)
@@ -75,8 +85,6 @@ static int do_getattr(const char *path, struct stat *st)
 		return -ENOENT;
 	}
 #endif
-
-	return 0;
 }
 
 // FUSE operation: mkdir
@@ -139,11 +147,16 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 // FUSE operation: readdir
 static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-
 	log_operation("readdir");
 	log_path("list contents", path);
-	// TODO: IMPLEMENT
-	return -1;
+	// TODO: IMPLEMENT PROPERLY
+
+	filler(buffer, ".", NULL, 0);  // Current Directory
+	filler(buffer, "..", NULL, 0); // Parent Directory
+
+	filler(buffer, "/2", NULL, 0); // fixed file, later implement properly
+
+	return 0;
 
 #if 0
 	// Sample implementation.
@@ -170,8 +183,7 @@ static int do_release(const char *path, struct fuse_file_info *info)
 	log_operation("release");
 	log_path("to close file", path);
 	// TODO: implement
-	do_flush(path, info);
-	return -1;
+	return 0;
 }
 
 // FUSE operation: rename
@@ -230,6 +242,7 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 static struct fuse_operations operations = {
 	.access = do_access,
 	.chmod = do_chmod,
+	.flush = do_flush,
 	.getattr = do_getattr,
 	.mkdir = do_mkdir,
 	.mknod = do_mknod,
