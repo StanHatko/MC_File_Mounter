@@ -9,34 +9,65 @@
  * License: GNU GPL
  */
 
-// Libraries: configuration and header files
-
 #define FUSE_USE_VERSION 35
 
+#include <errno.h>
 #include <fuse.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <time.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
+#include <unistd.h>
+
+#define TEMP_PATH_BUF_SIZE 128
+
+// Prefix of temporary files path.
+char *temp_files_prefix;
 
 // Get number that should be used for new temporary file.
 uint64_t get_temp_file_num()
 {
 	static int cur_num = 0;
-	pthread_mutex_lock(&file_list_lock);
+	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_lock(&lock);
 	cur_num += 1;
-	pthread_mutex_unlock(&file_list_lock);
+	pthread_mutex_unlock(&lock);
 	return cur_num;
+}
+
+// Get name to use for temporary file.
+void get_temp_file(char *buf, const char *op)
+{
+	sprintf(buf, "%s_%d_%s", temp_files_prefix, get_temp_file_num(), op);
 }
 
 // Log operation that is performed.
 void log_operation(const char *op_name)
 {
 	fprintf(stderr, "Perform operation: %s\n", op_name);
+}
+
+// Initialization function, sets up specified configuration.
+void init_config()
+{
+	temp_files_prefix = getenv("temp_files_prefix");
+
+	if (temp_files_prefix == NULL)
+	{
+		fprintf(stderr, "Must specify environment variable temp_files_prefix!\n");
+		exit(1);
+	}
+	fprintf(stderr, "Using temp_files_prefix: %s", temp_files_prefix);
+
+	int max_len = TEMP_PATH_BUF_SIZE - 64;
+	int nt = strlen(temp_files_prefix);
+	if (nt < max_len)
+	{
+		fprintf(stderr, "Too long temp_files_prefix, maximum is %d, specified %d!", max_len, nt);
+		exit(1);
+	}
 }
 
 // FUSE operation: access
@@ -122,8 +153,7 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("read");
-	save_param()
-		invoke_handler("read");
+	invoke_handler("read");
 	// Sample implementation.
 	// TODO: REPLACE
 	int file_idx = get_file_index(path);
@@ -224,5 +254,6 @@ static struct fuse_operations operations = {
 // Main run function.
 int main(int argc, char *argv[])
 {
+	init_config();
 	return fuse_main(argc, argv, &operations, NULL);
 }
