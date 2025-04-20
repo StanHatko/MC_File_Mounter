@@ -22,6 +22,17 @@
 
 #include "config.h"
 
+// Function that gets path to MinIO client binary.
+std::string get_mc_bin_path()
+{
+    const char *mc_bin = std::getenv("mc_bin_path");
+    if (mc_bin == nullptr)
+        throw "Cannot have mc_bin environment variable be missing!";
+
+    std::string s = mc_bin;
+    return s;
+}
+
 // Function that gets SH256 hex string from temp file.
 std::string get_sha256(std::string temp_path_base, std::string extension)
 {
@@ -189,7 +200,7 @@ int dir_list(std::string temp_path_base)
 
     // List contents of escaped directory.
     std::string contents_path = temp_path_base + ".raw_dir_list";
-    std::string cmd_list = "./mc ls --json '" + escaped_dir_path + "' >" + contents_path;
+    std::string cmd_list = get_mc_bin_path() + " ls --json '" + escaped_dir_path + "' >" + contents_path;
 
     int r_list = system(cmd_list.c_str());
     if (r_list != 0)

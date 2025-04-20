@@ -19,7 +19,10 @@
 #include "config.h"
 
 // Prefix of temporary files path.
-char *temp_files_prefix;
+const char *temp_files_prefix;
+
+// Prefix of MinIO data files path.
+const char *mc_data_prefix;
 
 // Get number that should be used for new temporary file.
 uint64_t get_temp_file_num()
@@ -41,34 +44,45 @@ void get_temp_file_base(char *buf)
 // Log operation that is performed.
 void log_operation(const char *op_name)
 {
-    fprintf(stderr, "Perform operation: %s\n", op_name);
+    printf("Perform operation: %s\n", op_name);
 }
 
 // Log path.
 void log_path(const char *name, const char *path)
 {
-    fprintf(stderr, "Path %s: %s\n", name, path);
+    printf("Path %s: %s\n", name, path);
 }
 
-// Initialization function, sets up specified configuration.
-void init_config()
+// Get and validate single configuration variable.
+const char *get_config_var(const char *var_name, int max_len)
 {
-    temp_files_prefix = getenv("temp_files_prefix");
+    const char *contents = getenv(var_name);
 
-    if (temp_files_prefix == NULL)
+    if (contents == NULL)
     {
-        fprintf(stderr, "Must specify environment variable temp_files_prefix!\n");
+        printf("Must specify environment variable %s!\n", var_name);
         exit(1);
     }
-    fprintf(stderr, "Using temp_files_prefix: %s\n", temp_files_prefix);
+    printf("Using %s: %s\n", var_name, contents);
 
-    int max_len = TEMP_PATH_BUF_BASE_SIZE - 64;
-    int nt = strlen(temp_files_prefix);
+    int nt = strlen(contents);
     if (nt > max_len)
     {
-        fprintf(stderr, "Too long temp_files_prefix, maximum is %d, specified %d!", max_len, nt);
+        printf("Too long %s, maximum is %d, specified %d!", var_name, max_len, nt);
         exit(1);
     }
+
+    return contents;
+}
+
+// Initialization function, sets up specified configuration from environment variables.
+void init_config()
+{
+    temp_files_prefix = get_config_var("temp_files_prefix", TEMP_PATH_BUF_BASE_SIZE - 64);
+    mc_data_prefix = get_config_var("mc_data_prefix", MAX_PATH_LEN - 64);
+
+    // Don't need in this program, but prevents other program from crashing due to missing environment variable.
+    get_config_var("mc_bin_path", 255);
 }
 
 // Main handler function that invokes C++ program that actually accesses the files.

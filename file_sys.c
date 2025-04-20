@@ -168,7 +168,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	WRITE_OP_INPUT("path", path, strlen(path));
 
 	// Invoke the main handler program that lists directory contents.
-	int r = invoke_handler("truncate", temp_path_base);
+	int r = invoke_handler("dir_list", temp_path_base);
 	if (r != 0)
 		return -1; // TODO adjust
 
