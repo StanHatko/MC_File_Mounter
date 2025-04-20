@@ -36,7 +36,7 @@ uint64_t get_temp_file_num()
 // Get base name to use for temporary file.
 void get_temp_file_base(char *buf)
 {
-    sprintf(buf, "%s_%" PRIu64 "_data", temp_files_prefix, get_temp_file_num());
+    sprintf(buf, "%s_trans_%" PRIu64 "_data", temp_files_prefix, get_temp_file_num());
 }
 
 // Log operation that is performed.
