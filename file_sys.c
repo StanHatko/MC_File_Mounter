@@ -206,6 +206,26 @@ static int do_rmdir(const char *path)
 	return -1;
 }
 
+// FUSE operation: truncate
+static int do_truncate(const char *path, off_t new_size)
+{
+	log_operation("truncate");
+	log_path("to truncate", path);
+	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
+	get_temp_file_base(temp_path_base);
+
+	// Send parameters what to resize to.
+	WRITE_OP_INPUT("path", path, strlen(path));
+	WRITE_OP_INPUT("size", &new_size, sizeof(off_t));
+
+	// Invoke the main handler program.
+	int r = invoke_handler("truncate", temp_path_base);
+	if (r != 0)
+		return -1; // TODO adjust
+
+	return 0;
+}
+
 // FUSE operation: unlink
 static int do_unlink(const char *path)
 {
@@ -251,6 +271,7 @@ static struct fuse_operations operations = {
 	.rename = do_rename,
 	.release = do_release,
 	.rmdir = do_rmdir,
+	.truncate = do_truncate,
 	.unlink = do_unlink,
 	.write = do_write,
 };
