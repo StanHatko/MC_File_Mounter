@@ -10,11 +10,30 @@
 char *mc_binary;
 char *mc_prefix;
 
+// Ensure environment variable of OK length.
+void validate_config_len(const char *name, const char *var, int max_len)
+{
+    if (var == NULL)
+    {
+        fprintf(stderr, "Variable %s cannot be NULL!", name);
+        exit(1);
+    }
+
+    int nv = strlen(var);
+    if (nv > max_len)
+    {
+        fprintf(stderr, "Variable %s too long at %d characters, maximum is %d!", name, nv, max_len);
+        exit(1);
+    }
+}
+
 void init_minio_mc_config()
 {
-    // TODO: VALIDATE LENGTH OF THESE!
     mc_binary = getenv("mc_binary");
+    validate_config_len("mc_binary", mc_binary, MAX_LEN_COMPONENTS);
+
     mc_prefix = getenv("mc_prefix");
+    validate_config_len("mc_prefix", mc_prefix, MAX_LEN_COMPONENTS);
 }
 
 int copy_to_minio(const char *local, const char *remote)
