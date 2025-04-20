@@ -81,13 +81,20 @@ std::string get_bash_escaped_string(std::string temp_file_base, std::string ext_
     std::string cmd = "cat " + temp_file_base + ext_input + " | jq -r '@sh' >" + out_file;
     int r = system(cmd.c_str());
     if (r != 0)
-        throw "Attempt to escape string failed!";
+    {
+        std::cout << "Attempt to escape string failed!\n";
+        return std::string("");
+    }
 
     // Get the string from the file.
     std::ifstream get_output(out_file);
     char sr[MAX_PATH_LEN];
     get_output.read(sr, MAX_PATH_LEN - 1);
+
+    // Chop newline off at end, if necessary.
     std::string s = sr;
+    if (s[s.length()] == '\n')
+        s.erase(1, std::string::npos);
     return s;
 }
 
@@ -200,7 +207,8 @@ int dir_list(std::string temp_path_base)
 
     // List contents of escaped directory.
     std::string contents_path = temp_path_base + ".raw_dir_list";
-    std::string cmd_list = get_mc_bin_path() + " ls --json '" + escaped_dir_path + "' >" + contents_path;
+    std::string cmd_list = get_mc_bin_path() + " ls --json " + escaped_dir_path + " >" + contents_path;
+    std::cout << "List using command: " << cmd_list << std::endl;
 
     int r_list = system(cmd_list.c_str());
     if (r_list != 0)
@@ -211,7 +219,8 @@ int dir_list(std::string temp_path_base)
 
     // Escape the listed directories.
     std::string out_path = temp_path_base + ".out";
-    std::string cmd_parse = "cat " + contents_path + " | jq -r '.key' >" + out_path;
+    std::string cmd_parse = "jq -f " + contents_path + " -r '.key' >" + out_path;
+    std::cout << "Parse using command: " << cmd_parse << std::endl;
 
     int r_escape = system(out_path.c_str());
     if (r_escape != 0)
@@ -221,6 +230,7 @@ int dir_list(std::string temp_path_base)
     }
 
     // The .out file now contains the list of files and directories.
+    std::cout << "Successfully listed the directory contents!\n";
     return 0;
 }
 

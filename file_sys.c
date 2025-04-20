@@ -164,8 +164,12 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	filler(buffer, ".", NULL, 0);  // Current Directory
 	filler(buffer, "..", NULL, 0); // Parent Directory
 
+	// Adjust path for MinIO mc ls operation.
+	char minio_path[4 * MAX_PATH_LEN];
+	sprintf(minio_path, "\"%s%s\"", mc_data_prefix, path);
+
 	// Send parameters of directory to list.
-	WRITE_OP_INPUT("path", path, strlen(path));
+	WRITE_OP_INPUT("path", minio_path, strlen(minio_path));
 
 	// Invoke the main handler program that lists directory contents.
 	int r = invoke_handler("dir_list", temp_path_base);
