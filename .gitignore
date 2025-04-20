@@ -1,8 +1,8 @@
 # Omit local executable and compiler output paths.
 mc
-mc_file_sys
+file_sys
 request_handler
-files.o
+*.o
 
 # Omit VSCode settings.
 .vscode/
