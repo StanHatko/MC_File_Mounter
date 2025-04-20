@@ -12,6 +12,7 @@
 #define FUSE_USE_VERSION 35
 #include <fuse.h>
 
+#include "config.h"
 #include "file_sys_support.c"
 
 // FUSE operation: access
@@ -157,20 +158,54 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 {
 	log_operation("readdir");
 	log_path("list contents", path);
-	// TODO: IMPLEMENT PROPERLY
+	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
+	get_temp_file_base(temp_path_base);
 
 	filler(buffer, ".", NULL, 0);  // Current Directory
 	filler(buffer, "..", NULL, 0); // Parent Directory
 
-	filler(buffer, "/2", NULL, 0); // fixed file, later implement properly
+	// Send parameters of directory to list.
+	WRITE_OP_INPUT("path", path, strlen(path));
+
+	// Invoke the main handler program that lists directory contents.
+	int r = invoke_handler("truncate", temp_path_base);
+	if (r != 0)
+		return -1; // TODO adjust
+
+	// Get list of files in the directory.
+	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
+	FILE *fr = fopen(temp_path_out, "r");
+	if (fr == NULL)
+		return -1; // TODO adjust
+
+	while (!feof(fr))
+	{
+		char s[MAX_PATH_LEN];
+		fgets(s, MAX_PATH_LEN - 1, fr);
+
+		if (ferror(fr))
+		{
+			fclose(fr);
+			return -1; // TODO adjust
+		}
+
+		// Remove trailing newline, by replacing with null character.
+		char *ch = s;
+		while (*ch != 0)
+		{
+			if (*ch == '\n')
+				*ch = 0;
+			ch++;
+		}
+
+		// Add file or directory to list.
+		filler(buffer, s, NULL, 0);
+	}
 
 	return 0;
 
 #if 0
 	// Sample implementation.
-
-	filler(buffer, ".", NULL, 0);  // Current Directory
-	filler(buffer, "..", NULL, 0); // Parent Directory
 
 	if (strcmp(path, "/") == 0) // If the user is trying to show the files/directories of the root directory show the following
 	{

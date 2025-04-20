@@ -16,8 +16,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define TEMP_PATH_BUF_BASE_SIZE 192
-#define TEMP_PATH_BUF_FULL_SIZE 256
+#include "config.h"
 
 // Prefix of temporary files path.
 char *temp_files_prefix;

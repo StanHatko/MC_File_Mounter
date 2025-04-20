@@ -20,6 +20,8 @@
 #include <sstream>
 #include <string>
 
+#include "config.h"
+
 // Function that gets SH256 hex string from temp file.
 std::string get_sha256(std::string temp_path_base, std::string extension)
 {
@@ -158,6 +160,22 @@ int file_truncate(std::string temp_path_base)
     return r;
 }
 
+// Function that lists files and subdirectories in directory.
+int dir_list(std::string temp_path_base)
+{
+    // TODO implement
+    //  Base on command:
+    //./mc ls --json $PATH_OF_INTEREST | jq -M '.key' | jq -r '@sh'
+
+    // Get path to directory with contents.
+    std::ifstream file_with_path(temp_path_base + ".path");
+    char dir_path[MAX_PATH_LEN];
+    file_with_path.getline(dir_path, MAX_PATH_LEN - 1);
+
+    // Escape directory and list contents.
+    std::string cmd_escape_dir = "";
+}
+
 // Function that handles each incoming request.
 int handle_request(std::string request_type, std::string temp_path_base)
 {
@@ -180,6 +198,10 @@ int handle_request(std::string request_type, std::string temp_path_base)
     else if (request_type == "flush")
     {
         return file_flush(temp_path_base);
+    }
+    else if (request_type == "dir_list")
+    {
+        return dir_list(temp_path_base);
     }
     else
     {
