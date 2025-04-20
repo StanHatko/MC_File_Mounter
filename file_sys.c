@@ -23,100 +23,23 @@
 #include <stdlib.h>
 #include <errno.h>
 
-// Program configuration
+// Get number that should be used for new temporary file.
+uint64_t get_temp_file_num()
+{
+	static int cur_num = 0;
+	pthread_mutex_lock(&file_list_lock);
+	cur_num += 1;
+	pthread_mutex_unlock(&file_list_lock);
+	return cur_num;
+}
 
-#define MC_PATH "./mc"
-
-// Global vars
-
-char dir_list[256][256];
-int curr_dir_idx = -1;
-
-char files_list[256][256];
-int curr_file_idx = -1;
-
-char files_content[256][256];
-int curr_file_content_idx = -1;
-
-// Implementations of internal functions.
-
+// Log operation that is performed.
 void log_operation(const char *op_name)
 {
 	fprintf(stderr, "Perform operation: %s\n", op_name);
 }
 
-void add_dir(const char *dir_name)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	curr_dir_idx++;
-	strcpy(dir_list[curr_dir_idx], dir_name);
-}
-
-int is_dir(const char *path)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	path++; // Eliminating "/" in the path
-
-	for (int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++)
-		if (strcmp(path, dir_list[curr_idx]) == 0)
-			return 1;
-
-	return 0;
-}
-
-void add_file(const char *filename)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	curr_file_idx++;
-	strcpy(files_list[curr_file_idx], filename);
-
-	curr_file_content_idx++;
-	strcpy(files_content[curr_file_content_idx], "");
-}
-
-int is_file(const char *path)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	path++; // Eliminating "/" in the path
-
-	for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
-		if (strcmp(path, files_list[curr_idx]) == 0)
-			return 1;
-
-	return 0;
-}
-
-int get_file_index(const char *path)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	path++; // Eliminating "/" in the path
-
-	for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
-		if (strcmp(path, files_list[curr_idx]) == 0)
-			return curr_idx;
-
-	return -1;
-}
-
-void write_to_file(const char *path, const char *new_content)
-{
-	// Sample implementation.
-	// TODO: REPLACE
-	int file_idx = get_file_index(path);
-
-	if (file_idx == -1) // No such file
-		return;
-
-	strcpy(files_content[file_idx], new_content);
-}
-
-// Implementations of necessary FUSE functions
-
+// FUSE operation: access
 static int do_access(const char *path, int perms)
 {
 	log_operation("access");
@@ -124,6 +47,7 @@ static int do_access(const char *path, int perms)
 	return -1;
 }
 
+// FUSE operation: chmod
 static int do_chmod(const char *path, mode_t mode)
 {
 	log_operation("chmod");
@@ -131,6 +55,7 @@ static int do_chmod(const char *path, mode_t mode)
 	return 0;
 }
 
+// FUSE operation: flush
 static int do_flush(const char *path, struct fuse_file_info *info)
 {
 	log_operation("flush");
@@ -138,6 +63,7 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	return -1;
 }
 
+// FUSE operation: getattr
 static int do_getattr(const char *path, struct stat *st)
 {
 	log_operation("getattr");
@@ -168,6 +94,7 @@ static int do_getattr(const char *path, struct stat *st)
 	return 0;
 }
 
+// FUSE operation: mkdir
 static int do_mkdir(const char *path, mode_t mode)
 {
 	log_operation("mkdir");
@@ -179,6 +106,7 @@ static int do_mkdir(const char *path, mode_t mode)
 	return 0;
 }
 
+// FUSE operation: mknod
 static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	log_operation("mknod");
@@ -190,9 +118,12 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 	return 0;
 }
 
+// FUSE operation: read
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("read");
+	save_param()
+		invoke_handler("read");
 	// Sample implementation.
 	// TODO: REPLACE
 	int file_idx = get_file_index(path);
@@ -207,6 +138,7 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	return strlen(content) - offset;
 }
 
+// FUSE operation: readdir
 static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("readdir");
@@ -228,6 +160,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	return 0;
 }
 
+// FUSE operation: release
 static int do_release(const char *path, struct fuse_file_info *info)
 {
 	log_operation("release");
@@ -236,6 +169,7 @@ static int do_release(const char *path, struct fuse_file_info *info)
 	return -1;
 }
 
+// FUSE operation: rename
 static int do_rename(const char *source_path, const char *dest_path)
 {
 	log_operation("rename");
@@ -244,6 +178,7 @@ static int do_rename(const char *source_path, const char *dest_path)
 	return -1;
 }
 
+// FUSE operation: rmdir
 static int do_rmdir(const char *path)
 {
 	log_operation("rmdir");
@@ -251,6 +186,7 @@ static int do_rmdir(const char *path)
 	return -1;
 }
 
+// FUSE operation: unlink
 static int do_unlink(const char *path)
 {
 	log_operation("unlink");
@@ -258,6 +194,7 @@ static int do_unlink(const char *path)
 	return -1;
 }
 
+// FUSE operation: write
 static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
 {
 	log_operation("write");
