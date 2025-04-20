@@ -27,3 +27,12 @@ void validate_config_len(const char *name, const char *var, int max_len)
         exit(1);
     }
 }
+
+// Print config variable.
+void print_config_var(const char *name, const char *var)
+{
+    if (var == NULL)
+        fprintf(stderr, "Configuration variable %s is NULL pointer.", name);
+    else
+        fprintf(stderr, "Configuration variable %s: %s", name, var);
+}
