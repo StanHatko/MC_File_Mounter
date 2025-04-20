@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -81,6 +82,12 @@ int file_truncate(std::string temp_path_base)
 
     // Do the truncate operation.
     std::cout << "Truncate path: " << cache_path << std::endl;
+    if (!std::filesystem::exists(cache_path))
+    {
+        std::cout << "Path does not currently exist, create it.\n";
+        std::ofstream(cache_path, std::ios::binary).close();
+    }
+
     std::printf("Truncate to size %zu.\n", new_size);
     int r = truncate(cache_path.c_str(), new_size);
     std::cout << "Truncate has return value: " << r << std::endl;
