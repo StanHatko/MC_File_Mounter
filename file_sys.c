@@ -10,65 +10,9 @@
  */
 
 #define FUSE_USE_VERSION 35
-
-#include <errno.h>
 #include <fuse.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <time.h>
-#include <unistd.h>
 
-#define TEMP_PATH_BUF_SIZE 128
-
-// Prefix of temporary files path.
-char *temp_files_prefix;
-
-// Get number that should be used for new temporary file.
-uint64_t get_temp_file_num()
-{
-	static int cur_num = 0;
-	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_mutex_lock(&lock);
-	cur_num += 1;
-	pthread_mutex_unlock(&lock);
-	return cur_num;
-}
-
-// Get name to use for temporary file.
-void get_temp_file(char *buf, const char *op)
-{
-	sprintf(buf, "%s_%d_%s", temp_files_prefix, get_temp_file_num(), op);
-}
-
-// Log operation that is performed.
-void log_operation(const char *op_name)
-{
-	fprintf(stderr, "Perform operation: %s\n", op_name);
-}
-
-// Initialization function, sets up specified configuration.
-void init_config()
-{
-	temp_files_prefix = getenv("temp_files_prefix");
-
-	if (temp_files_prefix == NULL)
-	{
-		fprintf(stderr, "Must specify environment variable temp_files_prefix!\n");
-		exit(1);
-	}
-	fprintf(stderr, "Using temp_files_prefix: %s", temp_files_prefix);
-
-	int max_len = TEMP_PATH_BUF_SIZE - 64;
-	int nt = strlen(temp_files_prefix);
-	if (nt < max_len)
-	{
-		fprintf(stderr, "Too long temp_files_prefix, maximum is %d, specified %d!", max_len, nt);
-		exit(1);
-	}
-}
+#include "file_sys_support.c"
 
 // FUSE operation: access
 static int do_access(const char *path, int perms)
@@ -153,52 +97,29 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("read");
+	char temp_path_base[TEMP_PATH_BUF_SIZE];
+	get_temp_file_base(temp_path_base);
 
 	// Send parameters what to read.
-	// Following in order:
-	// size_t size
-	// size_t offset
-	// int string length of path
-	// array char with path
-	char temp_path_in[TEMP_PATH_BUF_SIZE];
-	get_temp_file(temp_path_in, "in");
-
-	FILE *fi = fopen(temp_path_in, "wb");
-
-	fwrite(&size, sizeof(size_t), 1, fi);
-	fwrite(&offset, sizeof(size_t), 1, fi);
-
-	int np = strlen(path);
-	fwrite(&np, sizeof(int), 1, fi);
-	fwrite(path, 1, np, fi);
-
-	fclose(fi);
-
-	// File to get response info.
-	char temp_path_out[TEMP_PATH_BUF_SIZE];
-	get_temp_file(temp_path_out, "out");
+	WRITE_OP_INPUT("size", &size, sizeof(size_t));
+	WRITE_OP_INPUT("offset", &offset, sizeof(size_t));
+	WRITE_OP_INPUT("path", path, strlen(path));
 
 	// Invoke the main handler program.
-	invoke_handler("read", temp_path_in, temp_path_out);
+	invoke_handler("read", temp_path_base);
 
-	// Get the response info.
-	// Following in order:
-	FILE *fo = fopen(temp_path_out, "rb");
+	// Get response (exact contents to read in temp file) and save to buffer.
+	char temp_path_out[TEMP_PATH_BUF_SIZE];
+	sprintf(temp_path_out, "%s.out", temp_path_base);
+
+	FILE *fr = fopen(temp_path_out, "rb");
+	if (fr == NULL)
+		return -1; // TODO adjust
+
+	int bytes_read = fread(buffer, size, 0, fr);
+	fclose(fr);
 
 	return bytes_read;
-
-	// Sample implementation.
-	// TODO: REPLACE
-	int file_idx = get_file_index(path);
-
-	if (file_idx == -1)
-		return -1;
-
-	char *content = files_content[file_idx];
-
-	memcpy(buffer, content + offset, size);
-
-	return strlen(content) - offset;
 }
 
 // FUSE operation: readdir
