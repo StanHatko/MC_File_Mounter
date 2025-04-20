@@ -78,7 +78,8 @@ std::string get_bash_escaped_string(std::string temp_file_base, std::string ext_
     std::string out_file = temp_file_base + ext_temp;
 
     // Use jq command to bash-escape string.
-    std::string cmd = "cat " + temp_file_base + ext_input + " | jq -r '@sh' >" + out_file;
+    std::string cmd = "jq -r '@sh' >" + out_file + " <" + in_file;
+    std::cout << "Escape string in file for bash with command: " << cmd << std::endl;
     int r = system(cmd.c_str());
     if (r != 0)
     {
@@ -219,7 +220,7 @@ int dir_list(std::string temp_path_base)
 
     // Escape the listed directories.
     std::string out_path = temp_path_base + ".out";
-    std::string cmd_parse = "jq -f " + contents_path + " -r '.key' >" + out_path;
+    std::string cmd_parse = "jq -r '.key' >" + out_path + " <" + contents_path;
     std::cout << "Parse using command: " << cmd_parse << std::endl;
 
     int r_escape = system(out_path.c_str());
