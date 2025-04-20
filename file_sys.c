@@ -153,7 +153,40 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("read");
-	invoke_handler("read");
+
+	// Send parameters what to read.
+	// Following in order:
+	// size_t size
+	// size_t offset
+	// int string length of path
+	// array char with path
+	char temp_path_in[TEMP_PATH_BUF_SIZE];
+	get_temp_file(temp_path_in, "in");
+
+	FILE *fi = fopen(temp_path_in, "wb");
+
+	fwrite(&size, sizeof(size_t), 1, fi);
+	fwrite(&offset, sizeof(size_t), 1, fi);
+
+	int np = strlen(path);
+	fwrite(&np, sizeof(int), 1, fi);
+	fwrite(path, 1, np, fi);
+
+	fclose(fi);
+
+	// File to get response info.
+	char temp_path_out[TEMP_PATH_BUF_SIZE];
+	get_temp_file(temp_path_out, "out");
+
+	// Invoke the main handler program.
+	invoke_handler("read", temp_path_in, temp_path_out);
+
+	// Get the response info.
+	// Following in order:
+	FILE *fo = fopen(temp_path_out, "rb");
+
+	return bytes_read;
+
 	// Sample implementation.
 	// TODO: REPLACE
 	int file_idx = get_file_index(path);
