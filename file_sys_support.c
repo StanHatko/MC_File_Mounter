@@ -45,6 +45,12 @@ void log_operation(const char *op_name)
     fprintf(stderr, "Perform operation: %s\n", op_name);
 }
 
+// Log path.
+void log_path(const char *name, const char *path)
+{
+    fprintf(stderr, "Path %s: %s\n", name, path);
+}
+
 // Initialization function, sets up specified configuration.
 void init_config()
 {

@@ -18,6 +18,7 @@
 static int do_access(const char *path, int perms)
 {
 	log_operation("access");
+	log_path("to access", path);
 	// TODO: implement null version of this?
 	return -1;
 }
@@ -26,6 +27,7 @@ static int do_access(const char *path, int perms)
 static int do_chmod(const char *path, mode_t mode)
 {
 	log_operation("chmod");
+	log_path("to chmod", path);
 	// No-op implementation.
 	return 0;
 }
@@ -34,6 +36,7 @@ static int do_chmod(const char *path, mode_t mode)
 static int do_flush(const char *path, struct fuse_file_info *info)
 {
 	log_operation("flush");
+	log_path("to flush", path);
 	// TODO: implement
 	return -1;
 }
@@ -42,6 +45,7 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 static int do_getattr(const char *path, struct stat *st)
 {
 	log_operation("getattr");
+	log_path("to get attributes", path);
 	// TODO: REPLACE with get real info from MinIO
 
 	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
@@ -79,6 +83,7 @@ static int do_getattr(const char *path, struct stat *st)
 static int do_mkdir(const char *path, mode_t mode)
 {
 	log_operation("mkdir");
+	log_path("directory to create", path);
 	// TODO: REPLACE
 	return -1;
 }
@@ -87,6 +92,7 @@ static int do_mkdir(const char *path, mode_t mode)
 static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	log_operation("mknod");
+	log_path("to create", path);
 	// TODO: IMPLEMENT
 	return -1;
 #if 0
@@ -102,6 +108,7 @@ static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("read");
+	log_path("to read", path);
 	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
 	get_temp_file_base(temp_path_base);
 
@@ -134,6 +141,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 {
 
 	log_operation("readdir");
+	log_path("list contents", path);
 	// TODO: IMPLEMENT
 	return -1;
 
@@ -160,6 +168,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 static int do_release(const char *path, struct fuse_file_info *info)
 {
 	log_operation("release");
+	log_path("to close file", path);
 	// TODO: implement
 	do_flush(path, info);
 	return -1;
@@ -169,6 +178,8 @@ static int do_release(const char *path, struct fuse_file_info *info)
 static int do_rename(const char *source_path, const char *dest_path)
 {
 	log_operation("rename");
+	log_path("source file", source_path);
+	log_path("destination file", dest_path);
 	// TODO: implement
 	// Not real rename with mc commands!
 	return -1;
@@ -178,6 +189,7 @@ static int do_rename(const char *source_path, const char *dest_path)
 static int do_rmdir(const char *path)
 {
 	log_operation("rmdir");
+	log_path("directory to remove", path);
 	// TODO: implement
 	return -1;
 }
@@ -186,6 +198,7 @@ static int do_rmdir(const char *path)
 static int do_unlink(const char *path)
 {
 	log_operation("unlink");
+	log_path("file to remove", path);
 	// TODO: implement
 	return -1;
 }
@@ -194,6 +207,7 @@ static int do_unlink(const char *path)
 static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
 {
 	log_operation("write");
+	log_path("to write", path);
 	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
 	get_temp_file_base(temp_path_base);
 
