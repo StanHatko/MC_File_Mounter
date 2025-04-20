@@ -8,6 +8,7 @@
 // Libraries
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -60,13 +61,68 @@ std::string get_cache_path(std::string sha)
 // Function that reads input from file.
 int file_read(std::string temp_path_base)
 {
-    return -2;
+    // Get path of cache file.
+    std::string cache_path = get_cache_path(get_sha256(temp_path_base, ".path"));
+
+    // Get metadata for read operation.
+    return -1; // TODO implement
 }
 
 // Function that writes output to file.
 int file_write(std::string temp_path_base)
 {
-    return -3;
+    // Get path of cache file.
+    std::string cache_path = get_cache_path(get_sha256(temp_path_base, ".path"));
+
+    // Get offset for write operation.
+    std::ifstream file_with_offset(temp_path_base + ".offset", std::ios::binary);
+    std::size_t offset;
+    file_with_offset >> offset;
+    std::printf("Using offset %zu.\n", offset);
+
+    // Get buffer contents and size for write operation.
+    std::string path_with_buffer = temp_path_base + ".buffer";
+    std::intmax_t nc = std::filesystem::file_size(path_with_buffer);
+    std::cout << "Size of buffer to write: " << nc << std::endl;
+
+    char *buf = new char[nc];
+    std::ifstream file_with_buffer(path_with_buffer, std::ios::binary);
+    file_with_buffer.read(buf, nc);
+
+    if (file_with_buffer.gcount() < nc)
+    {
+        std::cout << "Failed to read all " << nc << " bytes required!\n";
+        return -EIO;
+    }
+
+    // Do the write operation on cache file.
+    FILE *f = fopen(cache_path.c_str(), "ab");
+    if (f == nullptr)
+    {
+        std::cout << "Failed to open cache file!\n";
+        delete[] buf;
+        return -EIO;
+    }
+
+    fseek(f, offset, SEEK_SET);
+    fwrite(buf, 1, nc, f);
+    delete[] buf;
+
+    if (ferror(f) != 0)
+    {
+        std::cout << "Failed I/O on cache file!\n";
+        fclose(f);
+        return -EIO;
+    }
+
+    if (fclose(f) != 0)
+    {
+        std::cout << "Failed close operation on cache file!\n";
+        return -EIO;
+    }
+
+    // If reached here, successful.
+    return 0;
 }
 
 // Function that truncates file to specified size.
