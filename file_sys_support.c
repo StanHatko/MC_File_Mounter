@@ -16,8 +16,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define TEMP_PATH_BUF_BASE_SIZE 96
-#define TEMP_PATH_BUF_FULL_SIZE 128
+#define TEMP_PATH_BUF_BASE_SIZE 192
+#define TEMP_PATH_BUF_FULL_SIZE 256
 
 // Prefix of temporary files path.
 char *temp_files_prefix;
@@ -61,11 +61,11 @@ void init_config()
         fprintf(stderr, "Must specify environment variable temp_files_prefix!\n");
         exit(1);
     }
-    fprintf(stderr, "Using temp_files_prefix: %s", temp_files_prefix);
+    fprintf(stderr, "Using temp_files_prefix: %s\n", temp_files_prefix);
 
     int max_len = TEMP_PATH_BUF_BASE_SIZE - 64;
     int nt = strlen(temp_files_prefix);
-    if (nt < max_len)
+    if (nt > max_len)
     {
         fprintf(stderr, "Too long temp_files_prefix, maximum is %d, specified %d!", max_len, nt);
         exit(1);
