@@ -75,8 +75,9 @@ void init_config()
 // Main handler function that invokes C++ program that actually accesses the files.
 int invoke_handler(const char *op, const char *temp_file_base)
 {
-    // TODO implement
-    return -1;
+    char cmd[TEMP_PATH_BUF_FULL_SIZE + 256];
+    sprintf(cmd, "./request_handler %s %s", op, temp_file_base);
+    return system(cmd);
 }
 
 // Macro that outputs input file for operation parameters.
