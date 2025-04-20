@@ -52,12 +52,12 @@ static int do_getattr(const char *path, struct stat *st)
 
 	if (strcmp(path, "/") == 0 || is_dir(path) == 1)
 	{
-		st->st_mode = S_IFDIR | 0755;
+		st->st_mode = 0100777;
 		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
 	}
 	else if (is_file(path) == 1)
 	{
-		st->st_mode = S_IFREG | 0644;
+		st->st_mode = 040777;
 		st->st_nlink = 1;
 		st->st_size = 1024;
 	}
@@ -106,7 +106,9 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	WRITE_OP_INPUT("path", path, strlen(path));
 
 	// Invoke the main handler program.
-	invoke_handler("read", temp_path_base);
+	int r = invoke_handler("read", temp_path_base);
+	if (r != 0)
+		return -1; // TODO adjust
 
 	// Get response (exact contents to read in temp file) and save to buffer.
 	char temp_path_out[TEMP_PATH_BUF_SIZE];
@@ -125,9 +127,13 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 // FUSE operation: readdir
 static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+
 	log_operation("readdir");
+	// TODO: IMPLEMENT
+	return -1;
+
+#if 0
 	// Sample implementation.
-	// TODO: REPLACE
 
 	filler(buffer, ".", NULL, 0);  // Current Directory
 	filler(buffer, "..", NULL, 0); // Parent Directory
@@ -142,6 +148,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	}
 
 	return 0;
+#endif
 }
 
 // FUSE operation: release
@@ -182,10 +189,21 @@ static int do_unlink(const char *path)
 static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
 {
 	log_operation("write");
-	// Sample implementation.
-	// TODO: REPLACE
-	write_to_file(path, buffer);
+	char temp_path_base[TEMP_PATH_BUF_SIZE];
+	get_temp_file_base(temp_path_base);
 
+	// Send parameters what to write.
+	WRITE_OP_INPUT("size", &size, sizeof(size_t));
+	WRITE_OP_INPUT("offset", &offset, sizeof(size_t));
+	WRITE_OP_INPUT("path", path, strlen(path));
+	WRITE_OP_INPUT("buffer", buffer, size);
+
+	// Invoke the main handler program.
+	int r = invoke_handler("write", temp_path_base);
+	if (r != 0)
+		return -1; // TODO adjust
+
+	// Always writes size bytes, if did not then failure indicated earlier.
 	return size;
 }
 
