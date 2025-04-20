@@ -16,7 +16,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define TEMP_PATH_BUF_SIZE 128
+#define TEMP_PATH_BUF_BASE_SIZE 96
+#define TEMP_PATH_BUF_FULL_SIZE 128
 
 // Prefix of temporary files path.
 char *temp_files_prefix;
@@ -35,7 +36,7 @@ uint64_t get_temp_file_num()
 // Get base name to use for temporary file.
 void get_temp_file_base(char *buf)
 {
-    sprintf(buf, "%s_%" PRIu64 "_%s", temp_files_prefix, get_temp_file_num());
+    sprintf(buf, "%s_%" PRIu64 "_data", temp_files_prefix, get_temp_file_num());
 }
 
 // Log operation that is performed.
@@ -56,7 +57,7 @@ void init_config()
     }
     fprintf(stderr, "Using temp_files_prefix: %s", temp_files_prefix);
 
-    int max_len = TEMP_PATH_BUF_SIZE - 64;
+    int max_len = TEMP_PATH_BUF_BASE_SIZE - 64;
     int nt = strlen(temp_files_prefix);
     if (nt < max_len)
     {
@@ -65,10 +66,17 @@ void init_config()
     }
 }
 
+// Main handler function that invokes C++ program that actually accesses the files.
+int invoke_handler(const char *op, const char *temp_file_base)
+{
+    // TODO implement
+    return -1;
+}
+
 // Macro that outputs input file for operation parameters.
 #define WRITE_OP_INPUT(dest_name, source_buf, size)                 \
     {                                                               \
-        char temp_path_cur[TEMP_PATH_BUF_SIZE];                     \
+        char temp_path_cur[TEMP_PATH_BUF_FULL_SIZE];                \
         sprintf(temp_path_cur, "%s.%s", temp_path_base, dest_name); \
         FILE *f = fopen(temp_path_cur, "wb");                       \
         if (f == NULL)                                              \

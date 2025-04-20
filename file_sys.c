@@ -42,14 +42,19 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 static int do_getattr(const char *path, struct stat *st)
 {
 	log_operation("getattr");
-	// Sample implementation.
-	// TODO: REPLACE
+	// TODO: REPLACE with get real info from MinIO
 
-	st->st_uid = getuid();	   // The owner of the file/directory is the user who mounted the filesystem
-	st->st_gid = getgid();	   // The group of the file/directory is the same as the group of the user who mounted the filesystem
+	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
+	st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
+
 	st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
 	st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
 
+	st->st_mode = 040777;
+	st->st_nlink = 1;
+	st->st_size = 1024;
+
+#if 0
 	if (strcmp(path, "/") == 0 || is_dir(path) == 1)
 	{
 		st->st_mode = 0100777;
@@ -65,6 +70,7 @@ static int do_getattr(const char *path, struct stat *st)
 	{
 		return -ENOENT;
 	}
+#endif
 
 	return 0;
 }
@@ -73,31 +79,30 @@ static int do_getattr(const char *path, struct stat *st)
 static int do_mkdir(const char *path, mode_t mode)
 {
 	log_operation("mkdir");
-	// Sample implementation.
 	// TODO: REPLACE
-	path++;
-	add_dir(path);
-
-	return 0;
+	return -1;
 }
 
 // FUSE operation: mknod
 static int do_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	log_operation("mknod");
+	// TODO: IMPLEMENT
+	return -1;
+#if 0
 	// Sample implementation.
-	// TODO: REPLACE
 	path++;
 	add_file(path);
 
 	return 0;
+#endif
 }
 
 // FUSE operation: read
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("read");
-	char temp_path_base[TEMP_PATH_BUF_SIZE];
+	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
 	get_temp_file_base(temp_path_base);
 
 	// Send parameters what to read.
@@ -111,7 +116,7 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 		return -1; // TODO adjust
 
 	// Get response (exact contents to read in temp file) and save to buffer.
-	char temp_path_out[TEMP_PATH_BUF_SIZE];
+	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
 	sprintf(temp_path_out, "%s.out", temp_path_base);
 
 	FILE *fr = fopen(temp_path_out, "rb");
@@ -189,7 +194,7 @@ static int do_unlink(const char *path)
 static int do_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *info)
 {
 	log_operation("write");
-	char temp_path_base[TEMP_PATH_BUF_SIZE];
+	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
 	get_temp_file_base(temp_path_base);
 
 	// Send parameters what to write.
