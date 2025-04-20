@@ -174,6 +174,8 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 
 	// Get list of files in the directory.
 	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
+	sprintf(temp_path_out, "%s.out", temp_path_base);
+
 	FILE *fr = fopen(temp_path_out, "r");
 	if (fr == NULL)
 		return -1; // TODO adjust

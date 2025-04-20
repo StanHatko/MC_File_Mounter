@@ -60,6 +60,26 @@ std::string get_cache_path(std::string sha)
     return path;
 }
 
+// Function that escapes string inside file for use in bash.
+std::string get_bash_escaped_string(std::string temp_file_base, std::string ext_input, std::string ext_temp)
+{
+    std::string in_file = temp_file_base + ext_input;
+    std::string out_file = temp_file_base + ext_temp;
+
+    // Use jq command to bash-escape string.
+    std::string cmd = "cat " + temp_file_base + ext_input + " | jq -r '@sh' >" + out_file;
+    int r = system(cmd.c_str());
+    if (r != 0)
+        throw "Attempt to escape string failed!";
+
+    // Get the string from the file.
+    std::ifstream get_output(out_file);
+    char sr[MAX_PATH_LEN];
+    get_output.read(sr, MAX_PATH_LEN - 1);
+    std::string s = sr;
+    return s;
+}
+
 // Function that reads input from file.
 int file_read(std::string temp_path_base)
 {
@@ -163,17 +183,34 @@ int file_truncate(std::string temp_path_base)
 // Function that lists files and subdirectories in directory.
 int dir_list(std::string temp_path_base)
 {
-    // TODO implement
-    //  Base on command:
-    //./mc ls --json $PATH_OF_INTEREST | jq -M '.key' | jq -r '@sh'
+    // Get escaped path to directory with contents.
+    std::string escaped_dir_path = get_bash_escaped_string(temp_path_base, ".path", ".escaped");
+    std::cout << "List contents of escaped directory path: " << escaped_dir_path << std::endl;
 
-    // Get path to directory with contents.
-    std::ifstream file_with_path(temp_path_base + ".path");
-    char dir_path[MAX_PATH_LEN];
-    file_with_path.getline(dir_path, MAX_PATH_LEN - 1);
+    // List contents of escaped directory.
+    std::string contents_path = temp_path_base + ".raw_dir_list";
+    std::string cmd_list = "./mc ls --json '" + escaped_dir_path + "' >" + contents_path;
 
-    // Escape directory and list contents.
-    std::string cmd_escape_dir = "";
+    int r_list = system(cmd_list.c_str());
+    if (r_list != 0)
+    {
+        std::cout << "Failed to list directory contents, exit.\n";
+        return -EIO;
+    }
+
+    // Escape the listed directories.
+    std::string out_path = temp_path_base + ".out";
+    std::string cmd_parse = "cat " + contents_path + " | jq -r '.key' >" + out_path;
+
+    int r_escape = system(out_path.c_str());
+    if (r_escape != 0)
+    {
+        std::cout << "Failed to escape listed directory contents, exit.\n";
+        return -EIO;
+    }
+
+    // The .out file now contains the list of files and directories.
+    return 0;
 }
 
 // Function that handles each incoming request.
