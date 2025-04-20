@@ -1,8 +1,11 @@
-#Omit local executable and compiler output paths.
+# Omit local executable and compiler output paths.
 mc
 mc_file_sys
 request_handler
 files.o
 
-#Omit VSCode settings.
+# Omit VSCode settings.
 .vscode/
+
+# Omit temp notes.
+tmp*
