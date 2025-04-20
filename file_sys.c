@@ -37,8 +37,16 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 {
 	log_operation("flush");
 	log_path("to flush", path);
-	// TODO: implement
-	return -1;
+	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
+	get_temp_file_base(temp_path_base);
+
+	// Send parameters what to write.
+	WRITE_OP_INPUT("path", path, strlen(path));
+
+	// Invoke the main handler program.
+	int r = invoke_handler("flush", temp_path_base);
+
+	return r;
 }
 
 // FUSE operation: getattr

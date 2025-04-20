@@ -125,6 +125,14 @@ int file_write(std::string temp_path_base)
     return 0;
 }
 
+// Function that flushes output file.
+int file_flush(std::string temp_path_base)
+{
+    // TODO IMPLEMENT
+    // For now no-op, once MinIO support added will copy cache file to MinIO.
+    return 0;
+}
+
 // Function that truncates file to specified size.
 int file_truncate(std::string temp_path_base)
 {
@@ -168,6 +176,10 @@ int handle_request(std::string request_type, std::string temp_path_base)
     else if (request_type == "truncate")
     {
         return file_truncate(temp_path_base);
+    }
+    else if (request_type == "flush")
+    {
+        return file_flush(temp_path_base);
     }
     else
     {
