@@ -184,7 +184,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	if (fr == NULL)
 		return -1; // TODO adjust
 
-	while (!feof(fr))
+	while (true)
 	{
 		char s[MAX_PATH_LEN];
 		fgets(s, MAX_PATH_LEN - 1, fr);
@@ -193,6 +193,13 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 		{
 			fclose(fr);
 			return -1; // TODO adjust
+		}
+
+		// If end of file occurred, done.
+		if (feof(fr))
+		{
+			fclose(fr);
+			break;
 		}
 
 		// Remove trailing newline, by replacing with null character.
