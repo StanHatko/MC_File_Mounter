@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import time
 
 
@@ -74,23 +75,56 @@ class FileObject:
         self.request_id = None
         self.filename = file_name
         self.write_out = False
+        self.cache_file = tempfile.NamedTemporaryFile(mode="+wb")
         self.process = None
         self.cache_file = None
 
     def get_from_remote(self, request_cur: dict):
-        TODO
+        pass
 
     def send_to_remote(self, request_cur: dict):
-        TODO
+        pass
 
     def write(self, request_cur: dict):
-        TODO
+        """
+        Write data to on-disk cache, in specified location.
+        """
+        print("Write data to file:", self.filename)
+        rb = request_cur["base"]
+
+        # Seek to required offset.
+        with open(f"{rb}.offset", "r", encoding="UTF8") as f:
+            offset = int(f.read())
+        self.cache_file.seek(offset, os.SEEK_SET)
+
+        # Get the required buffer.
+        with open(f"{rb}.buffer", "rb") as f:
+            data = f.read()
+
+        # Do the write itself.
+        print(f"Write {len(data)} bytes at offset {offset}.")
+        self.cache_file.write(data)
+        self.write_out = True
+        print("Successfully completed the write operation.")
 
     def read(self, request_cur: dict):
-        TODO
+        """
+        Read data from on-disk cache, in specified location.
+        """
 
     def truncate(self, request_cur: dict):
-        TODO
+        """
+        Truncate file to specified size.
+        """
+
+        print("Truncate file:", self.filename)
+        rb = request_cur["base"]
+
+        with open(f"{rb}.length", "r", encoding="UTF8") as f:
+            length = int(f.read())
+        print("Truncate to length:", length)
+        os.truncate(self.cache_file.name, length)
+        print("Successfully truncated the file.")
 
 
 class DirObject:
