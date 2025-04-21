@@ -10,6 +10,18 @@ import queue
 import time
 
 
+def get_file_str(filename: str) -> str | None:
+    """
+    Get contents of file as string, or None if fails.
+    """
+    try:
+        with open(filename, "r", encoding="UTF8") as f:
+            return f.read()
+    except (OSError, UnicodeError) as e:
+        print(f"Could not read string from file, with exception: {e}")
+        return None
+
+
 class FileSysRequest:
     """
     Request to file system.
@@ -19,19 +31,40 @@ class FileSysRequest:
         self.request_num = request_num
         self.config = config
         self.is_active = False
+        self.is_done = False
+        self.operation = None
 
-    def check_if_activated(self):
+        comm_path = self.config["comm_path"]
+        self.comm_base = f"{comm_path}_{self.request_num}_data."
+
+    def check_if_available(self) -> bool:
         """
         Check if request is available.
         """
         if self.is_active:
             return True
-        comm_path = self.config["comm_path"]
-        ready_path = f"{comm_path}_{self.request_num}_data.start"
+        ready_path = f"{self.comm_base}.start"
         return os.path.exists(ready_path)
 
+    def start_handle_request(self):
+        """
+        Start the actual handling of the request.
+        """
 
-def get_config_var(var_name: str):
+        assert not self.is_active
+        self.operation = get_file_str(f"{self.comm_base}.op")
+
+        if self.operation is None:
+            print("Unable to obtain operation to perform.")
+            return
+
+        if self.operation == "read":
+            TODO
+        elif self.operation == "write":
+            TODO
+
+
+def get_config_var(var_name: str) -> str:
     """
     Gets specified configuration variable (from environment variables).
     """
@@ -58,6 +91,7 @@ def main():
 
     requests = queue.Queue()
     filesys_metadata = {}
+    active_files = {}
     cur_request = 0
 
     requests.put(FileSysRequest(cur_request, config))
