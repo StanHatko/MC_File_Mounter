@@ -3,10 +3,11 @@
 Backend server for handling MinIO MC-based file-system requests.
 """
 
+import glob
 import json
 import os
+import re
 import subprocess
-import queue
 import time
 
 
@@ -75,6 +76,62 @@ def get_config_var(var_name: str) -> str:
     return v
 
 
+def handle_requests(comm_path: str, requests: dict) -> bool:
+    """
+    Handle all active requests and detect new requests to handle.
+    Returns bool indicating if any updates have occurred.
+    """
+
+    print("Handle all requests with start file present...")
+    sfs = glob.glob(f"{comm_path}*.start")
+    nfs = len(sfs)
+    print(f"Found {nfs} start indicator files.")
+    new_activity = False
+
+    for sf in sfs:
+        base = re.sub(r"\.start$", "", sf)
+
+        if base not in requests:
+            print("Found new request:", base)
+            # TODO: add handling of new request
+            new_activity = True
+        else:
+            # TODO: add handling of ongoing or done request
+            TODO
+
+    return new_activity
+
+
+def delete_old_comm_files(comm_path: str, requests: dict) -> int:
+    """
+    Delete old communication files that are no longer needed.
+    Returns number of deleted files.
+    """
+
+    print("Delete old communication files for tasks with delete file created...")
+    dfs = glob.glob(f"{comm_path}*.del")
+    nfs = len(dfs)
+    print(f"Found {nfs} delete indicator files.")
+
+    nc = 0
+    for df in dfs:
+        base = re.sub(r"\.del$", "", df)
+        print("Delete files starting with:", base)
+
+        # Remove from requests (if not present, OK).
+        requests.pop(base, None)
+
+        for fn in glob.glob(f"{base}*"):
+            print("Delete file:", fn)
+            # If cannot delete, undefined behavior will occur if ignore error.
+            # So make fatal error that crashes program.
+            os.unlink(fn)
+            nc += 1
+
+    print(f"Deleted total of {nc} files.")
+    return nc
+
+
 def main():
     """
     Main function invoked when running program.
@@ -82,22 +139,25 @@ def main():
     """
 
     print("Initialize back-end for MinIO-MC based file system...")
-
     config = {
         "mc_bin_path": get_config_var("mc_bin_path"),
         "comm_path": get_config_var("mc_comm_prefix"),
         "remote_prefix": get_config_var("mc_path_prefix"),
     }
+    comm_path = config["comm_path"]
 
-    requests = queue.Queue()
     filesys_metadata = {}
-    active_files = {}
-    cur_request = 0
+    requests = {}
 
-    requests.put(FileSysRequest(cur_request, config))
-
+    print("Handle requests with infinite loop...")
     while True:
-        cr = requests.get()
+        # Detect requests that should be handled.
+        handle_requests(comm_path, requests)
+
+        # Detect old request files to be deleted.
+        delete_old_comm_files(comm_path, requests)
+
+        # TODO: sleep between requests, duration depends on activity
 
 
 if __name__ == "__main__":
