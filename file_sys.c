@@ -216,21 +216,6 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	}
 
 	return 0;
-
-#if 0
-	// Sample implementation.
-
-	if (strcmp(path, "/") == 0) // If the user is trying to show the files/directories of the root directory show the following
-	{
-		for (int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++)
-			filler(buffer, dir_list[curr_idx], NULL, 0);
-
-		for (int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++)
-			filler(buffer, files_list[curr_idx], NULL, 0);
-	}
-
-	return 0;
-#endif
 }
 
 // FUSE operation: release
