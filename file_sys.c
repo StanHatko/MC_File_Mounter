@@ -44,10 +44,12 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	// Send parameters what to write.
 	WRITE_OP_INPUT("path", path, strlen(path));
 
-	// Invoke the main handler program.
-	int r = invoke_handler("flush", temp_path_base);
+	// Send request.
+	CREATE_START_REQUEST()
 
-	return r;
+	// TODO implement rest
+
+	return 0;
 }
 
 // FUSE operation: getattr
@@ -127,17 +129,18 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	log_operation("read");
 	log_path("to read", path);
 	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
+	char param_str[MAX_INT_LEN];
 	get_temp_file_base(temp_path_base);
 
 	// Send parameters what to read.
-	WRITE_OP_INPUT("size", &size, sizeof(size_t));
-	WRITE_OP_INPUT("offset", &offset, sizeof(size_t));
+	sprintf(param_str, "%zu", size);
+	WRITE_OP_INPUT("size", &param_str, strlen(param_str));
+	sprintf(param_str, "%zu", offset);
+	WRITE_OP_INPUT("offset", &param_str, strlen(param_str));
 	WRITE_OP_INPUT("path", path, strlen(path));
 
-	// Invoke the main handler program.
-	int r = invoke_handler("read", temp_path_base);
-	if (r != 0)
-		return -1; // TODO adjust
+	// Send request and wait for response to become available.
+	CREATE_START_REQUEST()
 
 	// Get response (exact contents to read in temp file) and save to buffer.
 	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];

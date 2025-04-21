@@ -39,7 +39,7 @@ uint64_t get_temp_file_num()
 // Get base name to use for temporary file.
 void get_temp_file_base(char *buf)
 {
-    sprintf(buf, "%s_trans_%" PRIu64 "_data", temp_files_prefix, get_temp_file_num());
+    sprintf(buf, "%s_%" PRIu64 "_data", temp_files_prefix, get_temp_file_num());
 }
 
 // Log operation that is performed.
@@ -80,18 +80,28 @@ const char *get_config_var(const char *var_name, int max_len)
 void init_config()
 {
     temp_files_prefix = get_config_var("temp_files_prefix", TEMP_PATH_BUF_BASE_SIZE - 64);
-    mc_data_prefix = get_config_var("mc_data_prefix", MAX_PATH_LEN - 64);
-
-    // Don't need in this program, but prevents other program from crashing due to missing environment variable.
-    get_config_var("mc_bin_path", 255);
 }
 
-// Main handler function that invokes C++ program that actually accesses the files.
-int invoke_handler(const char *op, const char *temp_file_base)
+// Function that waits for output to become available.
+void wait_for_output(const char *temp_name_base)
 {
-    char cmd[TEMP_PATH_BUF_FULL_SIZE + 256];
-    sprintf(cmd, "./request_handler %s %s", op, temp_file_base);
-    return system(cmd);
+    char path[TEMP_PATH_BUF_FULL_SIZE];
+    sprintf(path, "%s.done", ".done");
+
+    while (true)
+    {
+        if (access(path, F_OK) == 0)
+        {
+            // Done file exists, exit loop.
+            return;
+        }
+
+        // Wait a bit before checking again.
+        struct timespec tim, tim2;
+        tim.tv_sec = 0;
+        tim.tv_nsec = TIME_SLEEP_NANOSEC;
+        nanosleep(&tim, &tim2);
+    }
 }
 
 // Macro that outputs input file for operation parameters.
@@ -103,5 +113,20 @@ int invoke_handler(const char *op, const char *temp_file_base)
         if (f == NULL)                                              \
             return -1; /*TODO adjust*/                              \
         fwrite(source_buf, size, 1, f);                             \
+        if (f == NULL)                                              \
+            return -1; /*TODO adjust*/                              \
         fclose(f);                                                  \
+        if (f == NULL)                                              \
+            return -1; /*TODO adjust*/                              \
+    }
+
+// Macro that creates ".start" file to indicate to backend server to process request.
+#define CREATE_START_REQUEST()                     \
+    {                                              \
+        char path[TEMP_PATH_BUF_FULL_SIZE];        \
+        sprintf(path, "%s.start", temp_path_base); \
+        FILE *f = fopen(path, "wb");               \
+        if (f == NULL)                             \
+            return -1; /*TODO adjust*/             \
+        fclose(f);                                 \
     }
