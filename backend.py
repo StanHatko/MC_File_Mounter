@@ -65,6 +65,111 @@ class FileSysRequest:
             TODO
 
 
+class FileObject:
+    """
+    File object for remote file system.
+    """
+
+    def __init__(self, file_name: str, config: dict):
+        self.request_id = None
+        self.filename = file_name
+        self.write_out = False
+        self.process = None
+        self.cache_file = None
+
+    def get_from_remote(self, request_cur: dict):
+        TODO
+
+    def send_to_remote(self, request_cur: dict):
+        TODO
+
+    def write(self, request_cur: dict):
+        TODO
+
+    def read(self, request_cur: dict):
+        TODO
+
+    def truncate(self, request_cur: dict):
+        TODO
+
+
+class DirObject:
+    """
+    Directory or file metadata object for remote file system.
+    """
+
+    def __init__(self, dir_name: str, config: dict):
+        self.request_id = None
+        self.dir_name = dir_name
+        self.time_created = time.time()
+        self.process = None
+        self.results = None
+        self.mc_bin_path = config["mc_bin_path"]
+
+    def is_available(self) -> bool:
+        """
+        Returns True if can run new request now, False if not.
+        """
+        return self.request_id is None
+
+    def get_dir_list(self, request_cur: dict) -> bool:
+        """
+        Get list of contents for the directory or file.
+        Returns True if done, False if not done.
+        Asynchronous, run as needed until gets result.
+        Updates the self.results object when done.
+        """
+
+        # Initialize
+        self.request_id = request_cur["id"]
+        self.results = None
+
+        # Run the mc ls process
+        if self.process is not None:
+            # Get metadata.
+            print("Start process to get metadata for directory:", self.dir_name)
+            self.process = subprocess.Popen(
+                [
+                    self.mc_bin_path,
+                    "ls",
+                    "--json",
+                    self.dir_name,
+                ],
+                stdout=subprocess.PIPE,
+            )
+
+        # Check if done.
+        if self.process.poll():
+            print("Process metadata for directory:", self.dir_name)
+
+            # If failed, indicate this.
+            if self.process.returncode != 0:
+                print("Get metadata has failed with return code:", self.returncode)
+                self.results = {"failed": True}
+                return True
+
+            # Parse the output JSON.
+            t = self.process.stdout.split("\n")
+            r = []
+            for line in t:
+                line = line.strip()
+                if line == "":
+                    continue
+                try:
+                    r.append(json.loads(line))
+                except (json.JSONDecodeError, UnicodeError) as e:
+                    print("Encountered JSON decode error:", e)
+
+            # Indicate done.
+            print("Number of entries detected:", len(r))
+            self.process = None
+            self.request_id = None
+            return True
+
+        # Not yet done.
+        return False
+
+
 def get_config_var(var_name: str) -> str:
     """
     Gets specified configuration variable (from environment variables).
