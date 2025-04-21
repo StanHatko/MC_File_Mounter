@@ -215,9 +215,80 @@ def get_config_var(var_name: str) -> str:
     return v
 
 
-def handle_requests(comm_path: str, requests: dict) -> bool:
+def do_unlink(request: dict, config: dict, files_cache: dict, metadata_cache: dict):
     """
-    Handle all active requests and detect new requests to handle.
+    Deletes file from cache and MinIO storage.
+    """
+
+    if not request["init"]:
+        # Init process to delete from MinIO
+        request["process"] = subprocess.Popen(
+            [config["mc_bin_path"], "mc", "rm", filename]
+        )
+
+        # Delete from file cache.
+        if filename in files_cache:
+            try:
+                os.unlink(files_cache["temp_name"])
+            except OSError as e:
+                print("Failed to remove temporary file, with exception:", e)
+            files_cache.pop(filename)
+
+        # Delete from metadata cache.
+        metadata_cache.pop(filename, None)
+
+
+def process_operation(
+    request: str,
+    operation: str,
+    config: dict,
+    files_cache: dict,
+    metadata_cache: dict,
+) -> bool:
+    """
+    Process individual operation, by calling correct function.
+    """
+
+    if operation == "read":
+        do_read(request, config, files_cache)
+    elif operation == "write":
+        do_write(request, config, files_cache)
+    elif operation == "truncate":
+        do_truncate(request, config, files_cache)
+    elif operation == "unlink":
+        do_unlink(request, config, files_cache)
+    else:
+        raise NotImplementedError(f"Operation: {operation}")
+
+
+def process_requests(
+    requests: dict,
+    config: dict,
+    files_cache: dict,
+    metadata_cache: dict,
+) -> bool:
+    """
+    Process all active requests.
+    Returns bool indicating if any updates have occurred.
+    """
+
+    nr = len(requests)
+    print(f"Process all {nr} requests...")
+
+    for k in requests:
+        cr = requests[k]
+
+        # Skip done operations, nothing to do but wait until safe to delete.
+        if cr["done"]:
+            continue
+
+        op = cr["operation"]
+        process_operation(cr, op, config, files_cache, metadata_cache)
+
+
+def add_requests(comm_path: str, requests: dict) -> bool:
+    """
+    Detect new requests to handle.
     Returns bool indicating if any updates have occurred.
     """
 
@@ -227,16 +298,25 @@ def handle_requests(comm_path: str, requests: dict) -> bool:
     print(f"Found {nfs} start indicator files.")
     new_activity = False
 
+    # Add new requests to list.
     for sf in sfs:
         base = re.sub(r"\.start$", "", sf)
 
         if base not in requests:
             print("Found new request:", base)
-            # TODO: add handling of new request
+
+            op = get_file_str(f"{base}.task")
+            print("Operation type:", op)
+            if op is None:
+                print("Error: invalid request, operation type cannot be missing!")
+
+            requests[base] = {
+                "base": base,
+                "init": False,
+                "done": False,
+                "operation": op,
+            }
             new_activity = True
-        else:
-            # TODO: add handling of ongoing or done request
-            TODO
 
     return new_activity
 
@@ -285,13 +365,17 @@ def main():
     }
     comm_path = config["comm_path"]
 
-    filesys_metadata = {}
+    files_cache = {}
+    metadata_cache = {}
     requests = {}
 
     print("Handle requests with infinite loop...")
     while True:
-        # Detect requests that should be handled.
-        handle_requests(comm_path, requests)
+        # Detect new requests that should be processed.
+        add_requests(comm_path, requests)
+
+        # Process all existing requests.
+        process_requests(requests, config, files_cache, metadata_cache)
 
         # Detect old request files to be deleted.
         delete_old_comm_files(comm_path, requests)
