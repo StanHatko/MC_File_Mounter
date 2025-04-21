@@ -44,8 +44,9 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	// Send parameters what to write.
 	WRITE_OP_INPUT("path", path, strlen(path));
 
-	// Send request.
-	CREATE_START_REQUEST()
+	// Send request and wait for response to become available.
+	CREATE_START_REQUEST();
+	wait_for_output(temp_path_base);
 
 	// TODO implement rest
 
@@ -140,7 +141,8 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	WRITE_OP_INPUT("path", path, strlen(path));
 
 	// Send request and wait for response to become available.
-	CREATE_START_REQUEST()
+	CREATE_START_REQUEST();
+	wait_for_output(temp_path_base);
 
 	// Get response (exact contents to read in temp file) and save to buffer.
 	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
@@ -174,10 +176,9 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	// Send parameters of directory to list.
 	WRITE_OP_INPUT("path", minio_path, strlen(minio_path));
 
-	// Invoke the main handler program that lists directory contents.
-	int r = invoke_handler("dir_list", temp_path_base);
-	if (r != 0)
-		return -1; // TODO adjust
+	// Send request and wait for response to become available.
+	CREATE_START_REQUEST();
+	wait_for_output(temp_path_base);
 
 	// Get list of files in the directory.
 	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
@@ -262,10 +263,9 @@ static int do_truncate(const char *path, off_t new_size)
 	WRITE_OP_INPUT("path", path, strlen(path));
 	WRITE_OP_INPUT("size", &new_size, sizeof(off_t));
 
-	// Invoke the main handler program.
-	int r = invoke_handler("truncate", temp_path_base);
-	if (r != 0)
-		return -1; // TODO adjust
+	// Send request and wait for response to become available.
+	CREATE_START_REQUEST();
+	wait_for_output(temp_path_base);
 
 	return 0;
 }
@@ -293,10 +293,9 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 	WRITE_OP_INPUT("path", path, strlen(path));
 	WRITE_OP_INPUT("buffer", buffer, size);
 
-	// Invoke the main handler program.
-	int r = invoke_handler("write", temp_path_base);
-	if (r != 0)
-		return -1; // TODO adjust
+	// Send request and wait for response to become available.
+	CREATE_START_REQUEST();
+	wait_for_output(temp_path_base);
 
 	// Always writes size bytes, if did not then failure indicated earlier.
 	return size;

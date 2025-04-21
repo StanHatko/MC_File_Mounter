@@ -83,10 +83,10 @@ void init_config()
 }
 
 // Function that waits for output to become available.
-void wait_for_output(const char *temp_name_base)
+void wait_for_output(const char *temp_path_base)
 {
     char path[TEMP_PATH_BUF_FULL_SIZE];
-    sprintf(path, "%s.done", ".done");
+    sprintf(path, "%s.done", temp_path_base);
 
     while (true)
     {
