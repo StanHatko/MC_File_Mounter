@@ -90,13 +90,8 @@ std::string get_bash_escaped_string(std::string temp_file_base, std::string ext_
     // Get the string from the file.
     std::ifstream get_output(out_file);
     char sr[MAX_PATH_LEN];
-    get_output.read(sr, MAX_PATH_LEN - 1);
-
-    // Chop newline off at end, if necessary.
-    std::string s = sr;
-    if (s[s.length()] == '\n')
-        s.erase(1, std::string::npos);
-    return s;
+    get_output.getline(sr, MAX_PATH_LEN - 1);
+    return std::string(sr);
 }
 
 // Function that reads input from file.
@@ -223,7 +218,7 @@ int dir_list(std::string temp_path_base)
     std::string cmd_parse = "jq -r '.key' >" + out_path + " <" + contents_path;
     std::cout << "Parse using command: " << cmd_parse << std::endl;
 
-    int r_escape = system(out_path.c_str());
+    int r_escape = system(cmd_parse.c_str());
     if (r_escape != 0)
     {
         std::cout << "Failed to escape listed directory contents, exit.\n";
