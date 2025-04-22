@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Backend server for handling MinIO MC-based file-system requests.
+Backend server for handling MinIO-based file-system requests.
 """
 
 import glob
-import json
+import io
+import multiprocessing as mp
 import os
-import re
-import subprocess
+import sys
 import tempfile
-import time
+
+import minio
 
 
 def get_file_str(filename: str) -> str | None:
@@ -391,6 +392,29 @@ def delete_old_comm_files(comm_path: str, requests: dict) -> int:
     return nc
 
 
+def clean_operations(config: dict, processes: dict):
+    """
+    Cleanup files from old operations that have already completed.
+    """
+
+    for p in processes:
+        if p["process"].poll():
+            n = p["op_num"]
+            print(f"Found process {n} has already finished.")
+
+            base_path = p["base_path"]
+            for x in glob.glob(f"{base_path}*"):
+                print("Delete old temporary file:", x)
+                try:
+                    os.unlink(x)
+                except OSError as e:
+                    print("Error occurred removing file:", e)
+
+            p["input_queue"].destroy()
+            p["output_queue"].destroy()
+            print(f"Done cleanup for finished process {n}.")
+
+
 def main():
     """
     Main function invoked when running program.
@@ -399,28 +423,24 @@ def main():
 
     print("Initialize back-end for MinIO-MC based file system...")
     config = {
-        "mc_bin_path": get_config_var("mc_bin_path"),
-        "comm_path": get_config_var("mc_comm_prefix"),
-        "remote_prefix": get_config_var("mc_path_prefix"),
+        "minio_server": get_config_var("minio_server"),
+        "minio_username": get_config_var("minio_username"),
+        "minio_password": get_config_var("minio_password"),
+        "minio_bucket": get_config_var("minio_bucket"),
+        "control_pipe": get_config_var("control_pipe"),
     }
-    comm_path = config["comm_path"]
-
-    files_cache = {}
-    metadata_cache = {}
-    requests = {}
+    processes = {}
 
     print("Handle requests with infinite loop...")
-    while True:
-        # Detect new requests that should be processed.
-        add_requests(comm_path, requests)
+    op_num = 1
+    with open(control_pipe, "r", encoding="utf-8") as control_pipe:
+        print("Wait for operation #{op_num} to perform.")
+        base_path = control_pipe.readline()
+        print("Perform operation, based on files with prefix:", base_path)
 
-        # Process all existing requests.
-        process_requests(requests, config, files_cache, metadata_cache)
-
-        # Detect old request files to be deleted.
-        delete_old_comm_files(comm_path, requests)
-
-        # TODO: sleep between requests, duration depends on activity
+        start_operation(base_path, config, processes, op_num)
+        clean_operations(config, processes)
+        op_num += 1
 
 
 if __name__ == "__main__":

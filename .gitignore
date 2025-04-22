@@ -4,7 +4,8 @@ file_sys
 request_handler
 *.o
 
-# Omit VSCode settings.
+# Omit various settings.
+start/
 .vscode/
 
 # Omit temp notes.
