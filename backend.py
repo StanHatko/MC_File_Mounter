@@ -44,16 +44,6 @@ def write_request_str(request: dict, param_name: str, value: str):
         f.write(value)
 
 
-def get_minio_command(config: dict, cmd: str, params: list):
-    """
-    Get subprocess list to run specified MinIO mc client command.
-    """
-    r = [config["mc_bin_path"], cmd]
-    for p in params:
-        r.append(p)
-    return r
-
-
 class FileSysRequest:
     """
     Request to file system.
