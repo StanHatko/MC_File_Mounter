@@ -245,6 +245,12 @@ def get_config_var(var_name: str) -> str:
     return v
 
 
+def do_write(request: dict, config: dict, files_cache: dict):
+    """
+    Write data to file.
+    """
+
+
 def do_unlink(request: dict, config: dict, files_cache: dict, metadata_cache: dict):
     """
     Deletes file from cache and MinIO storage.
@@ -300,7 +306,7 @@ def process_operation(
     elif operation == "truncate":
         do_truncate(request, config, files_cache)
     elif operation == "unlink":
-        do_unlink(request, config, files_cache)
+        do_unlink(request, config, files_cache, metadata_cache)
     else:
         raise NotImplementedError(f"Operation: {operation}")
 
