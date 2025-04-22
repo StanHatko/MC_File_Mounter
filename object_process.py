@@ -174,8 +174,26 @@ def do_truncate(
         ret_code = -1
 
     file_state["write"] = False
-    send_output_int8(pipe_response, ret_code)  # success status code
+    send_output_int8(pipe_response, ret_code)
     print("Done the truncate operation.")
+
+
+def do_unlink(
+    file_state: dict,
+    pipe_response: io.BufferedWriter,
+):
+    """
+    Delete file in MinIO.
+    """
+    print("Delete file in MinIO:", file_state["name"])
+    try:
+        delete_minio(file_state)
+        ret_code = 0
+    except OSError as e:
+        print("Encountered error:", e)
+        ret_code = -1
+    send_output_int8(pipe_response, ret_code)
+    print("Done the delete operation.")
 
 
 def file_io_handler(file_state: dict, base_path: str) -> bool:
