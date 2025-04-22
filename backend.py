@@ -10,8 +10,6 @@ import os
 import sys
 import tempfile
 
-import minio
-
 
 def get_config_var(var_name: str) -> str:
     """
