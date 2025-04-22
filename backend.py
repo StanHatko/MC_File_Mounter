@@ -24,6 +24,36 @@ def get_file_str(filename: str) -> str | None:
         return None
 
 
+def get_request_file_str_param(request: dict, param_name: str) -> str:
+    """
+    Get required string parameter inside file for request.
+    """
+    base = request["base"]
+    filename = f"{base}.{param_name}"
+    with open(filename, "r", encoding="UTF8") as f:
+        return f.read()
+
+
+def write_request_str(request: dict, param_name: str, value: str):
+    """
+    Write string parameter output to file for response output.
+    """
+    base = request["base"]
+    filename = f"{base}.{param_name}"
+    with open(filename, "w", encoding="UTF8") as f:
+        f.write(value)
+
+
+def get_minio_command(config: dict, cmd: str, params: list):
+    """
+    Get subprocess list to run specified MinIO mc client command.
+    """
+    r = [config["mc_bin_path"], cmd]
+    for p in params:
+        r.append(p)
+    return r
+
+
 class FileSysRequest:
     """
     Request to file system.
@@ -219,23 +249,37 @@ def do_unlink(request: dict, config: dict, files_cache: dict, metadata_cache: di
     """
     Deletes file from cache and MinIO storage.
     """
+    filename = get_request_file_str_param(request, "path")
 
     if not request["init"]:
-        # Init process to delete from MinIO
+        print("Remove path:", filename)
+        request["init"] = True
+
+        # Start process to delete from MinIO
         request["process"] = subprocess.Popen(
-            [config["mc_bin_path"], "mc", "rm", filename]
+            get_minio_command(config, "rm", filename),
+            stdout=subprocess.DEVNULL,
         )
 
         # Delete from file cache.
         if filename in files_cache:
             try:
-                os.unlink(files_cache["temp_name"])
+                files_cache["temp_handle"].close()
             except OSError as e:
-                print("Failed to remove temporary file, with exception:", e)
+                print("Failed to close / remove temporary file, with exception:", e)
             files_cache.pop(filename)
 
         # Delete from metadata cache.
         metadata_cache.pop(filename, None)
+
+    # Check if process finished.
+    if request["process"].poll():
+        r = request["process"].returncode
+        print(f'Done delete file "{filename}", with return code {r}.')
+
+        write_request_str(request, "return", str(r))
+        write_request_str(request, "done", "")
+        request["done"] = True
 
 
 def process_operation(
