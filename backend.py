@@ -22,12 +22,12 @@ def get_config_var(var_name: str) -> str:
     return v
 
 
-def get_minio_path(base_path: str):
+def get_request_info(control_pipe: io.BufferedReader):
     """
-    Get the MinIO path that the operation applies to.
+    Get information about request from pipe.
     """
-    with open(f"{base_path}_path.txt", "r", encoding="utf-8") as f:
-        return f.read()
+    line = control_pipe.readline()
+    return line.split("|", maxsplit=3)
 
 
 def send_request(process: dict, base_path: str, op_num: int):
@@ -122,16 +122,33 @@ def main():
         "control_pipe": get_config_var("control_pipe"),
     }
     control_pipe_file = config["control_pipe"]
-    processes = {}
+    processes_file = {}
 
     print("Handle requests with infinite loop...")
     op_num = 1
-    with open(control_pipe_file, "r", encoding="utf-8") as control_pipe:
-        print("Wait for operation #{op_num} to perform.")
-        base_path = control_pipe.readline()
-        print("Perform operation, based on files with prefix:", base_path)
 
-        start_operation(base_path, config, processes, op_num)
+    with open(control_pipe_file, "r", encoding="utf-8") as control_pipe:
+        # Get the operation.
+        print("Wait for operation #{op_num} to perform.")
+        operation, pipe_in, pipe_out, minio_path = get_request_info(control_pipe)
+        print(
+            (
+                f"Operation # {op_num} is {operation} on object {minio_path}, "
+                f"using input pipe {pipe_in} and output pipe {pipe_out}."
+            )
+        )
+
+        # Do the actual operation.
+        start_operation(
+            operation,
+            pipe_in,
+            pipe_out,
+            minio_path,
+            config,
+            processes_file,
+        )
+
+        # Do cleanup as necessary.
         clean_operations(config, processes)
         op_num += 1
 

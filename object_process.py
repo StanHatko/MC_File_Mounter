@@ -129,7 +129,12 @@ def do_flush(
     print("Perform flush operation on file:", file_state["name"])
     try:
         file_state["handle"].flush()
-        copy_to_minio(file_state)
+
+        if file_state["write_out"]:
+            copy_to_minio(file_state)
+        else:
+            print("No need to copy to MinIO.")
+
         ret_code = 0
     except OSError as e:
         print("Encountered error:", e)
@@ -176,6 +181,12 @@ def do_truncate(
     file_state["write"] = False
     send_output_int8(pipe_response, ret_code)
     print("Done the truncate operation.")
+
+
+def do_release(file_state: dict, pipe_response: io.BufferedWriter):
+    """
+    Close file, writing out to MinIO if necessary.
+    """
 
 
 def do_unlink(
@@ -252,7 +263,9 @@ def object_process(
         file_state = {
             "temp_dir": temp_dir,
             "file_name": f"{temp_dir}/data.bin",
+            "handle": None,
             "is_init": False,
+            "write_out": False,
         }
 
         while True:
