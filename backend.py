@@ -10,6 +10,8 @@ import os
 import sys
 import tempfile
 
+from file_process import file_process
+
 
 def get_config_var(var_name: str) -> str:
     """
@@ -69,6 +71,8 @@ def start_operation(
     minio_path: str,
     config: dict,
     processes_file: dict,
+    processes_path: dict,
+    metadata: dict,
 ):
     """
     Start operation, either create new process or send request to existing.
@@ -76,17 +80,36 @@ def start_operation(
 
     # Action depends on type of operation.
     if operation in ["read", "write", "create", "flush", "release", "truncate"]:
-        # Operation applies to file process processes.
-        if minio_path in processes_file:
-            processes_file["input_queue"].put(TODO)
-        else:
+        # Operation applies to file processes that maintain state.
+
+        if minio_path not in processes_file:
             # Need to start new process.
-            start_process(TODO)
+            processes_file[minio_path] = file_process(
+                minio_path,
+                config,
+                queue_in,
+                queue_out,
+            )
+
+        processes_file[minio_path]["input_queue"].put(TODO)
     elif operation in ["access", "list_dir"]:
-        # Metadata-type operation.
-        TODO
+        # Get metadata operation.
+
+        if minio_path not in metadata and minio_path not in processes_path:
+            # Need to start new process.
+            processes_path[minio_path] = path_process(
+                minio_path,
+                config,
+                queue_in,
+                queue_out,
+            )
+
+        # If already in metadata, need to send the metadata directly to the named pipe.
+        if minio_path in metadata:
+            send_metadata(TODO)
     elif operation in ["mkdir", "rmdir", "unlink"]:
         # MinIO path-oriented operation.
+
         TODO
     else:
         raise NotImplementedError(f"operation: {operation}")
@@ -131,6 +154,8 @@ def main():
     }
     control_pipe_file = config["control_pipe"]
     processes_file = {}
+    processes_path = {}
+    metadata = {}
 
     print("Handle requests with infinite loop...")
     op_num = 1
@@ -154,6 +179,8 @@ def main():
             minio_path,
             config,
             processes_file,
+            processes_path,
+            metadata,
         )
 
         # Do cleanup as necessary.

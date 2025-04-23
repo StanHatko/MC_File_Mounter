@@ -11,20 +11,6 @@ import tempfile
 import minio
 
 
-def get_request_type(pipe_request: io.BufferedReader) -> str:
-    """
-    Get the type of request to perform from pipe.
-    Read null-terminated string from binary request pipe.
-    """
-    r = []
-    while True:
-        b = pipe_request.read(1)
-        if b == 0:
-            break
-        r.append(b)
-    return bytes(r).decode(encoding="utf-8")
-
-
 def get_input_uint64(pipe_request: io.BufferedReader) -> int:
     """
     Read unsigned 64-bit integer from pipe.
@@ -247,7 +233,7 @@ def file_io_handler(file_state: dict, base_path: str) -> bool:
             raise NotImplementedError(f"{request_type}: request_type")
 
 
-def object_process(
+def file_process(
     minio_path: str,
     config: dict,
     queue_in: mp.Queue,
