@@ -9,8 +9,154 @@ import multiprocessing as mp
 import os
 import sys
 import tempfile
+import time
 
-from file_process import file_process
+from implementations import handle_io_request
+
+# Operations that maintain file state.
+KEEP_STATE_OPS = [
+    "read",
+    "write",
+    "create",
+    "flush",
+    "release",
+    "truncate",
+]
+
+# Operations that get metadata.
+GET_METADATA_OPS = ["access", "list_dir"]
+
+# Operations that modify paths.
+MODIFY_PATH_OPS = ["mkdir", "rmdir", "unlink"]
+
+
+class FileObject:
+    """
+    Object in the MinIO remote file-system.
+    Operations on this object are done in a new process.
+    """
+
+    def __init__(self, minio_path: str, metadata: dict | None = None):
+        self.minio_path = minio_path
+        self.temp_path = None
+        self.write_out = False
+        self.queue_in = None
+        self.queue_out = None
+        self.process = None
+        self.last_modified = time.time()
+        self.metadata = metadata
+        self.num_requests = 0
+
+    def send_request(self, operation: str, pipe_in: str, pipe_out: str):
+        """
+        Send request with specified operation and pipes to use by adding to queue.
+        """
+
+        # Initialize queues if necessary.
+        if self.queue_in is None:
+            self.queue_in = mp.Queue()
+            self.queue_out = mp.Queue()
+
+        # Send the request.
+        self.queue_in.put(
+            {
+                "operation": operation,
+                "pipe_in": pipe_in,
+                "pipe_out": pipe_out,
+            }
+        )
+
+        # Update last modified time.
+        self.last_modified = time.time()
+        self.num_requests += 1
+
+    def _remove_finished_process(self):
+        if self.process is not None and not self.process.is_alive():
+            print(
+                (
+                    f"Process with PID {self.process.pid} exited with return "
+                    f"code {self.process.exitcode}, for path {self.minio_path}."
+                )
+            )
+            self.process = None
+            self.last_modified = time.time()
+
+    def _start_process_if_necessary(self):
+        if (
+            self.queue_in is not None
+            and self.process is None
+            and not self.queue_in.empty()
+        ):
+            self.process = mp.Process(
+                target=operation_process,
+                args=(self.minio_path, self.temp_path, self.queue_in, self.queue_out),
+            )
+            print(
+                f"Start process with PID {self.process.pid}, for path {self.minio_path}."
+            )
+            self.last_modified = time.time()
+
+    def _update_with_output(self, full_db: dict):
+        """
+        Get any outputs from the process.
+        """
+
+        # If no queue for file, nothing to do.
+        if self.queue_out is None:
+            return
+
+        # Update object and add new metadata objects as needed.
+        # TODO: change this, only run after process exits.
+        # Loop until done.
+        while not self.queue_out.empty():
+            r = self.queue_out.get()
+
+            # Update fields in current object.
+            if "temp_path" in r:
+                self.temp_path = r["temp_path"]
+            if "write_out" in r:
+                self.write_out = r["write_out"]
+            if "metadata_cur" in r:
+                self.metadata = r["metadata_cur"]
+
+            # Create new metadata object, if doesn't already exist.
+            if "metadata_new" in r:
+                meta_new = r["metadata_new"]
+                path_new = meta_new["minio_path"]
+                if path_new not in full_db:
+                    full_db[path_new] = FileObject(path_new, meta_new)
+
+            # Update last modified if any such operation performed.
+            self.last_modified = time.time()
+
+    def _delete_inactive(self, full_db: dict, age_delete_inactive: float):
+        if (
+            self.temp_path is None
+            and self.process is None
+            and (not self.write_out)
+            and (time.time() > self.last_modified + age_delete_inactive)
+        ):
+            # Destroy queues.
+            if self.queue_in is not None:
+                self.queue_in.close()
+            if self.queue_out is not None:
+                self.queue_out.close()
+
+            # Remove from database.
+            full_db.pop(self.minio_path, None)
+
+    def update(self, full_db: dict, age_delete_inactive: float):
+        """
+        Update the database if necessary, with the following operations:
+        * If existing processed finished, remove existing process.
+        * If no process running and nonempty input queue, start process.
+        * Update with output as necessary.
+        * If no longer needed and too old process, delete and remove from database.
+        """
+        self._remove_finished_process()
+        self._start_process_if_necessary()
+        self._update_with_output(full_db)
+        self._delete_inactive(full_db, age_delete_inactive)
 
 
 def get_config_var(var_name: str) -> str:
@@ -32,36 +178,39 @@ def get_request_info(control_pipe: io.BufferedReader):
     return line.split("|", maxsplit=3)
 
 
-def send_request(process: dict, base_path: str, op_num: int):
+def operation_process(
+    minio_path: str,
+    temp_path: str | None,
+    queue_in: mp.Queue,
+    queue_out: mp.Queue,
+):
     """
-    Send new request to input queue of process.
+    Runs process for single operation.
+    Input and output via controller process done using the per-file queues.
+    Other input and output done via pipes filenames passed using input queue.
     """
-    iq = process["input_queue"]
-    iq.put({"base_path": base_path, "op_num": op_num})
 
+    pid = os.getpid()
+    print(f"Running process {pid} for operation on file {minio_path}.")
 
-def start_process(minio_path: str, config: dict, processes: dict):
-    """
-    Starts a process dedicated for a specific object.
-    """
-    iq = mp.Queue()
-    oq = mp.Queue()
-    p = mp.Process(
-        target=object_process,
-        args=(
-            minio_path,
-            config,
-            iq,
-            oq,
-        ),
+    task = queue_in.get()
+    operation = task["operation"]
+    pipe_in = task["pipe_in"]
+    pipe_out = task["pipe_out"]
+    print(
+        (
+            f"Current operation is {operation}, with input pipe {pipe_in}, "
+            f"output pipe {pipe_out}, and temporary file {temp_path}."
+        )
     )
-    print(f"Started process with PID {p.pid} for {minio_path}.")
-    processes[minio_path] = {
-        "minio_path": minio_path,
-        "input_queue": iq,
-        "output_queue": oq,
-        "process": p,
-    }
+
+    output_data = handle_io_request(
+        minio_path,
+        operation,
+        pipe_in,
+        pipe_out,
+        temp_path,
+    )
 
 
 def start_operation(
@@ -70,47 +219,51 @@ def start_operation(
     pipe_out: io.BufferedWriter,
     minio_path: str,
     config: dict,
-    processes_file: dict,
-    processes_path: dict,
+    processes_stateful: dict,
+    processes_stateless: dict,
     metadata: dict,
 ):
     """
-    Start operation, either create new process or send request to existing.
+    Start operation, do one of:
+    * Create new process.
+    * Send request to existing process.
+    * Return cached metadata.
     """
 
-    # Action depends on type of operation.
-    if operation in ["read", "write", "create", "flush", "release", "truncate"]:
-        # Operation applies to file processes that maintain state.
-
-        if minio_path not in processes_file:
-            # Need to start new process.
-            processes_file[minio_path] = file_process(
+    if operation in KEEP_STATE_OPS:
+        # Send request to process that keeps state.
+        if minio_path not in processes_stateful:
+            processes_stateful[minio_path] = start_process_stateful(
                 minio_path,
                 config,
-                queue_in,
-                queue_out,
+                operation,
+                pipe_in,
+                pipe_out,
             )
-
-        processes_file[minio_path]["input_queue"].put(TODO)
-    elif operation in ["access", "list_dir"]:
-        # Get metadata operation.
-
-        if minio_path not in metadata and minio_path not in processes_path:
-            # Need to start new process.
-            processes_path[minio_path] = path_process(
-                minio_path,
-                config,
-                queue_in,
-                queue_out,
-            )
-
-        # If already in metadata, need to send the metadata directly to the named pipe.
-        if minio_path in metadata:
+        else:
+            send_process(processes_stateful[minio_path], operation, pipe_in, pipe_out)
+    elif operation in GET_METADATA_OPS:
+        # Send stateless get metadata request.
+        if minio_path in processes_stateful:
+            # If stateful process running, use metadata from that.
+            send_process(TODO)
+        elif minio_path in metadata:
+            # If cached metadata available, use that.
             send_metadata(TODO)
-    elif operation in ["mkdir", "rmdir", "unlink"]:
-        # MinIO path-oriented operation.
-
-        TODO
+        else:
+            # If neither above available, start process to get metadata.
+            processes_stateless[minio_path] = start_process_stateless(TODO)
+    elif operation in MODIFY_PATH_OPS:
+        if minio_path in processes_stateful:
+            # If stateful process running, use that to handle request.
+            send_process(TODO)
+        else:
+            # If already has stateless process, terminate it.
+            if minio_path in process_stateless:
+                end_process(processes_stateless[minio_path])
+                processes_stateless.pop(minio_path, None)
+            # Start process for stateless request that modifies path.
+            processes_stateless[minio_path] = start_process(TODO)
     else:
         raise NotImplementedError(f"operation: {operation}")
 
