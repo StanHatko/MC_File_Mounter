@@ -7,9 +7,9 @@ import glob
 import io
 import multiprocessing as mp
 import os
-import sys
 import tempfile
 import time
+import queue
 
 from implementations import handle_io_request
 
@@ -36,8 +36,9 @@ class FileObject:
     Operations on this object are done in a new process.
     """
 
-    def __init__(self, minio_path: str, metadata: dict | None = None):
+    def __init__(self, minio_path: str, config: dict, metadata: dict | None = None):
         self.minio_path = minio_path
+        self.config = config
         self.queue_in = None
         self.queue_out = None
         self.process = None
@@ -87,11 +88,12 @@ class FileObject:
             self.init_queues()
             self.metadata_cache = None
             self.process = mp.Process(
-                target=file_process,
+                target=object_process,
                 args=(
                     self.minio_path,
                     self.queue_in,
                     self.queue_out,
+                    self.config,
                 ),
             )
             print(
@@ -145,7 +147,7 @@ class FileObject:
                 meta_new = r["metadata_new"]
                 path_new = meta_new["minio_path"]
                 if path_new not in full_db:
-                    full_db[path_new] = FileObject(path_new, meta_new)
+                    full_db[path_new] = FileObject(path_new, self.config, meta_new)
 
             # Update last modified if any such operation performed.
             self.last_modified = time.time()
@@ -185,6 +187,65 @@ def get_request_info(control_pipe: io.BufferedReader):
     return line.split("|", maxsplit=3)
 
 
+def object_process_get(
+    queue_in: mp.Queue,
+    config: dict,
+    is_open: bool,
+    write_out: bool,
+):
+    """
+    Get object for multiprocessing queue, with possibility of exit for timeout.
+    """
+
+    # If may need to write out, wait indefinitely for input.
+    if write_out:
+        return queue_in.get()
+
+    # Wait in loop for required amount of time.
+    max_time = config["timeout_open_read"] if is_open else config["timeout_closed"]
+    start_time = time.time()
+    while True:
+        try:
+            return queue_in.get(timeout=1)
+        except queue.Empty:
+            cur_time = time.time()
+            elapsed_time = cur_time - start_time
+
+            if elapsed_time > max_time:
+                pid = os.getpid()
+                elapsed_time = round(elapsed_time, 2)
+                msg = (
+                    f"Timeout of process {pid} after {elapsed_time} seconds, "
+                    f"maximum time is {max_time} seconds."
+                )
+                print(msg)
+                # pylint: disable=raise-missing-from
+                raise TimeoutError(msg)
+
+
+def object_process(
+    minio_path: str,
+    queue_in: mp.Queue,
+    queue_out: mp.Queue,
+    config: dict,
+) -> int:
+    """
+    Function for process associated with MinIO object.
+    """
+
+    # Initialization
+    pid = os.getpid()
+    print(f"Running process {pid} for operation on object {minio_path}.")
+    temp_file = None
+    is_open = False
+    write_out = False
+
+    with tempfile.TemporaryDirectory() as td:
+        # Main loop for process: get and handle requests.
+        while True:
+            req = object_process_get(queue_in, config, is_open, write_out)
+
+
 def operation_process(
     minio_path: str,
     temp_path: str | None,
@@ -196,9 +257,6 @@ def operation_process(
     Input and output via controller process done using the per-file queues.
     Other input and output done via pipes filenames passed using input queue.
     """
-
-    pid = os.getpid()
-    print(f"Running process {pid} for operation on file {minio_path}.")
 
     task = queue_in.get()
     operation = task["operation"]
@@ -311,6 +369,8 @@ def main():
         "minio_password": get_config_var("minio_password"),
         "minio_bucket": get_config_var("minio_bucket"),
         "control_pipe": get_config_var("control_pipe"),
+        "timeout_closed": float(get_config_var("timeout_closed")),
+        "timeout_open_read": float(get_config_var("timeout_open_read")),
     }
     control_pipe_file = config["control_pipe"]
     processes_file = {}
