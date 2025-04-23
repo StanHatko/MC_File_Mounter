@@ -62,26 +62,34 @@ def start_process(minio_path: str, config: dict, processes: dict):
     }
 
 
-def start_operation(base_path: str, config: dict, processes: dict, op_num: int):
+def start_operation(
+    operation: str,
+    pipe_in: io.BufferedReader,
+    pipe_out: io.BufferedWriter,
+    minio_path: str,
+    config: dict,
+    processes_file: dict,
+):
     """
     Start operation, either create new process or send request to existing.
     """
 
-    # Need path the operation applies to.
-    try:
-        minio_path = get_minio_path(base_path)
-        print("Apply operation to path:", minio_path)
-    except OSError as e:
-        print("Unable to get path, exception occurred:", e)
-        return
-
-    if minio_path in processes:
-        # Process already exists, send request to it.
-        print("Send request to existing process.")
-
+    # Action depends on type of operation.
+    if operation in ["read", "write", "create", "flush", "release", "truncate"]:
+        # Operation applies to file process processes.
+        if minio_path in processes_file:
+            processes_file["input_queue"].put(TODO)
+        else:
+            # Need to start new process.
+            start_process(TODO)
+    elif operation in ["access", "list_dir"]:
+        # Metadata-type operation.
+        TODO
+    elif operation in ["mkdir", "rmdir", "unlink"]:
+        # MinIO path-oriented operation.
+        TODO
     else:
-        # Need new process.
-        print("Create new process for this object.")
+        raise NotImplementedError(f"operation: {operation}")
 
 
 def clean_operations(config: dict, processes: dict):
