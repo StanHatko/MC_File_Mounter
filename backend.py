@@ -38,39 +38,37 @@ class FileObject:
 
     def __init__(self, minio_path: str, metadata: dict | None = None):
         self.minio_path = minio_path
-        self.temp_path = None
-        self.write_out = False
         self.queue_in = None
         self.queue_out = None
         self.process = None
         self.last_modified = time.time()
-        self.metadata = metadata
-        self.num_requests = 0
+        self.metadata_cache = metadata
+        self.num_requests_sent = 0
+        self.num_requests_done = 0
 
-    def send_request(self, operation: str, pipe_in: str, pipe_out: str):
+    def get_cached_metadata(self):
         """
-        Send request with specified operation and pipes to use by adding to queue.
+        Returns metadata dictionary about the current object, if available.
+        If not available, instead need to query process.
+        Updates the last modified time as well.
         """
+        self.last_modified = time.time()
+        return self.metadata_cache
 
-        # Initialize queues if necessary.
+    def init_queues(self):
+        """
+        Initializes the input and output queues, if necessary.
+        Updates the last modified time.
+        """
         if self.queue_in is None:
             self.queue_in = mp.Queue()
             self.queue_out = mp.Queue()
 
-        # Send the request.
-        self.queue_in.put(
-            {
-                "operation": operation,
-                "pipe_in": pipe_in,
-                "pipe_out": pipe_out,
-            }
-        )
-
-        # Update last modified time.
-        self.last_modified = time.time()
-        self.num_requests += 1
-
-    def _remove_finished_process(self):
+    def cleanup_process(self):
+        """
+        If process is no longer alive, clean-up the process.
+        Does not update last modified time.
+        """
         if self.process is not None and not self.process.is_alive():
             print(
                 (
@@ -79,45 +77,68 @@ class FileObject:
                 )
             )
             self.process = None
-            self.last_modified = time.time()
 
-    def _start_process_if_necessary(self):
-        if (
-            self.queue_in is not None
-            and self.process is None
-            and not self.queue_in.empty()
-        ):
+    def start_process(self):
+        """
+        Starts (or re-starts) the process associated with this file.
+        Updates the last modified time.
+        """
+        if self.process is None:
+            self.init_queues()
+            self.metadata_cache = None
             self.process = mp.Process(
-                target=operation_process,
-                args=(self.minio_path, self.temp_path, self.queue_in, self.queue_out),
+                target=file_process,
+                args=(
+                    self.minio_path,
+                    self.queue_in,
+                    self.queue_out,
+                ),
             )
             print(
                 f"Start process with PID {self.process.pid}, for path {self.minio_path}."
             )
-            self.last_modified = time.time()
+        self.last_modified = time.time()
 
-    def _update_with_output(self, full_db: dict):
+    def send_request(self, operation: str, pipe_in: str, pipe_out: str):
         """
-        Get any outputs from the process.
+        Send request with specified operation and pipes to use by adding to queue.
+        Updates the last modified time.
+        """
+
+        self.init_queues()
+        self.queue_in.put(
+            {
+                "operation": operation,
+                "pipe_in": pipe_in,
+                "pipe_out": pipe_out,
+            }
+        )
+
+        # Update last modified time and certain metadata.
+        self.last_modified = time.time()
+        self.num_requests_sent += 1
+
+    def update_with_output(self, full_db: dict):
+        """
+        Get any outputs from the process and update necessary information.
+        Reach response updates last modified time.
         """
 
         # If no queue for file, nothing to do.
         if self.queue_out is None:
             return
 
-        # Update object and add new metadata objects as needed.
-        # TODO: change this, only run after process exits.
-        # Loop until done.
+        # Get any new outputs from process available.
         while not self.queue_out.empty():
             r = self.queue_out.get()
 
-            # Update fields in current object.
-            if "temp_path" in r:
-                self.temp_path = r["temp_path"]
-            if "write_out" in r:
-                self.write_out = r["write_out"]
+            # Indicate existing process done.
+            if "is_done" in r and r["is_done"]:
+                self.num_requests_done += 1
+
+            # Update metadata in current object (can be None to delete existing).
             if "metadata_cur" in r:
-                self.metadata = r["metadata_cur"]
+                self.metadata_cache = r["metadata_cur"]
 
             # Create new metadata object, if doesn't already exist.
             if "metadata_new" in r:
@@ -129,13 +150,12 @@ class FileObject:
             # Update last modified if any such operation performed.
             self.last_modified = time.time()
 
-    def _delete_inactive(self, full_db: dict, age_delete_inactive: float):
-        if (
-            self.temp_path is None
-            and self.process is None
-            and (not self.write_out)
-            and (time.time() > self.last_modified + age_delete_inactive)
-        ):
+    def delete_inactive(self, full_db: dict, age_delete_inactive: float):
+        """
+        If process exited and too old last modified, remove from database.
+        """
+        max_age = self.last_modified + age_delete_inactive
+        if self.process is None and (time.time() > max_age):
             # Destroy queues.
             if self.queue_in is not None:
                 self.queue_in.close()
@@ -144,19 +164,6 @@ class FileObject:
 
             # Remove from database.
             full_db.pop(self.minio_path, None)
-
-    def update(self, full_db: dict, age_delete_inactive: float):
-        """
-        Update the database if necessary, with the following operations:
-        * If existing processed finished, remove existing process.
-        * If no process running and nonempty input queue, start process.
-        * Update with output as necessary.
-        * If no longer needed and too old process, delete and remove from database.
-        """
-        self._remove_finished_process()
-        self._start_process_if_necessary()
-        self._update_with_output(full_db)
-        self._delete_inactive(full_db, age_delete_inactive)
 
 
 def get_config_var(var_name: str) -> str:
