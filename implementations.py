@@ -68,10 +68,7 @@ def do_read(
     """
 
     minio_path = config["minio_path"]
-    temp_path = config["temp_file"]
-    print(
-        f"Perform read operation on file {minio_path}, using temporary path {temp_path}."
-    )
+    print(f"Perform read operation on file {minio_path}.")
     init_local_file(config, True)
 
     size = get_input_uint64(pipe_request)
@@ -104,10 +101,7 @@ def do_write(
     """
 
     minio_path = config["minio_path"]
-    temp_path = config["temp_file"]
-    print(
-        f"Perform write operation on file {minio_path}, using temporary path {temp_path}."
-    )
+    print(f"Perform write operation on file {minio_path}.")
     init_local_file(config, True)  # if create new, create operation done before
 
     size = get_input_uint64(pipe_request)
@@ -119,37 +113,47 @@ def do_write(
         f = config["handle"]
         f.seek(offset, os.SEEK_SET)
         f.write(data)
-        send_output_int8(pipe_response, 0)
-        print("Done the write operation.")
+        ret_code = 0
     except OSError as e:
         print("Encountered error during write:", e)
-        send_output_int8(pipe_response, -1)
+        ret_code = -1
+
+    send_output_int8(pipe_response, ret_code)
+    print("Done the write operation.")
+
+
+def do_flush_direct(config: dict) -> dict:
+    """
+    Does flush operation and backup to MinIO.
+    Raises exception on error.
+    """
+    f = config["handle"]
+    if f is None:
+        print("No data to flush to file.")
+    f.flush()
+    copy_to_minio(config["temp_path"], config["minio_path"])
 
 
 def do_flush(
-    file_state: dict,
+    config: dict,
     pipe_response: io.BufferedWriter,
 ):
     """
     Backup output to configured MinIO storage.
     """
 
-    print("Perform flush operation on file:", file_state["name"])
+    minio_path = config["minio_path"]
+    print(f"Perform flush operation on file {minio_path}.")
+
     try:
-        file_state["handle"].flush()
-
-        if file_state["write_out"]:
-            copy_to_minio(file_state)
-        else:
-            print("No need to copy to MinIO.")
-
+        do_flush_direct(config)
         ret_code = 0
     except OSError as e:
         print("Encountered error:", e)
         ret_code = -1
 
+    config["write"] = False
     send_output_int8(pipe_response, ret_code)
-    file_state["write"] = False
     print("Done the flush operation.")
 
 
