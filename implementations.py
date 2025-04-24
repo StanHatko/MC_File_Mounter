@@ -35,27 +35,122 @@ def send_output_uint64(pipe_response: io.BufferedWriter, value: int):
     pipe_response.write(b)
 
 
-def init_local_file(config: dict, retrieve: bool):
+class CacheObject:
     """
-    If necessary, initialize the local file either by copying from MinIO or creating empty.
+    Object representing cached entry in MinIO file system.
     """
 
-    if config["handle"] is not None:
-        # Already have open local file.
-        return
+    def __init__(self, minio_path: str, temp_dir: str, config: dict):
+        self.minio_path = minio_path
+        self.basic_minio_path = minio_path.lstrip("/")
+        self.temp_dir = temp_dir
+        self.temp_path = f"{temp_dir}/file.bin"
+        self.config = config
 
-    temp_path = config["temp_path"]
-    minio_path = config["minio_path"]
+        self.write_out = False
+        self.handle = None
+        self.minio_client = minio.Minio(
+            config["minio_host"],
+            access_key=config["minio_access_key"],
+            secret_key=config["minio_secret_key"],
+        )
+        self.minio_bucket = self.config["minio_bucket"]
 
-    if retrieve:
-        # Copy object from MinIO to temporary file.
-        print(f"Copy to local file {temp_path} MinIO object {minio_path}.")
-        copy_from_minio(config, minio_path, temp_path)
-        config["handle"] = open(temp_path, "+wb")
-    else:
-        # Create empty.
-        print(f"Create empty local file {temp_path} for MinIO object {minio_path}.")
-        config["handle"] = open(temp_path, "+wb")
+    def init_handle(self, retrieve: bool):
+        """
+        Initialize handle to the temporary file, initializing it if necessary.
+        Option retrieve controls whether file needs to be copied.
+        """
+
+        temp_path = self.temp_path
+        minio_path = self.minio_path
+
+        if retrieve:
+            # Copy object from MinIO to temporary file.
+            print(f"Copy to local file {temp_path} MinIO object {minio_path}.")
+            self.minio_client.fget_object(
+                self.minio_bucket,
+                self.basic_minio_path,
+                self.temp_path,
+            )
+
+            self.handle = open(temp_path, "+ab")
+            print("Done obtaining the object from MinIO.")
+        else:
+            # Create empty.
+            print(f"Create empty local file {temp_path} for MinIO object {minio_path}.")
+            self.handle = open(temp_path, "+wb")
+            print("Done creating the new empty file.")
+            self.write_out = True
+
+    def put_object_minio(self):
+        """
+        Copy temporary file object to MinIO storage.
+        """
+        self.minio_client.fput_object(
+            self.minio_bucket,
+            self.minio_path,
+            self.temp_path,
+        )
+
+    def read(self, size: int, offset: int) -> bytes:
+        """
+        Read size bytes at offset.
+        """
+        self.init_handle(True)
+        self.handle.seek(offset, os.SEEK_SET)
+        return self.handle.read(size)
+
+    def write(self, data: bytes, offset: int) -> bytes:
+        """
+        Write specified bytes at offset.
+        """
+        self.init_handle(True)
+        self.handle.seek(offset, os.SEEK_SET)
+        self.handle.write(data)
+        self.write_out = True
+
+    def flush(self):
+        """
+        Flush file to disk cache and MinIO, if anything to write.
+        """
+        self.init_handle(False)
+        if self.write_out:
+            self.handle.flush()
+            self.put_object_minio()
+            self.write_out = False
+
+    def create(self):
+        """
+        Create new file.
+        TODO: if file already exists, raise error instead.
+        """
+        self.init_handle(False)
+        self.put_object_minio()
+
+    def truncate(self, length: int):
+        """
+        Truncate file to specified size.
+        """
+        self.init_handle(length > 0)  # only need to copy if nonzero new length
+        os.truncate(self.temp_path, length)
+        self.put_object_minio()
+
+    def unlink(self):
+        """
+        Delete file on MinIO.
+        """
+
+        if self.handle is not None:
+            self.handle.close()
+            self.handle = None
+
+        try:
+            os.unlink(self.temp_path)
+        except FileNotFoundError:
+            pass
+
+        self.minio_client.remove_object(self.minio_bucket)
 
 
 def do_read(

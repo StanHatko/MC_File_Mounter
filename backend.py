@@ -348,13 +348,19 @@ def main():
     print("Initialize back-end for MinIO-MC based file system...")
     config = {
         "minio_server": get_config_var("minio_server"),
-        "minio_username": get_config_var("minio_username"),
-        "minio_password": get_config_var("minio_password"),
+        "minio_access_key": get_config_var("minio_access_key"),
+        "minio_secret_key": get_config_var("minio_secret_key"),
         "minio_bucket": get_config_var("minio_bucket"),
         "control_pipe": get_config_var("control_pipe"),
         "timeout_closed": float(get_config_var("timeout_closed")),
         "timeout_open_read": float(get_config_var("timeout_open_read")),
     }
+    config["minio_host"] = (
+        config["minio_server"]
+        .removeprefix("http://")
+        .removeprefix("https://")
+        .strip(" /")
+    )
     control_pipe_file = config["control_pipe"]
     objects_db = {}
 
