@@ -35,36 +35,40 @@ def send_output_uint64(pipe_response: io.BufferedWriter, value: int):
     pipe_response.write(b)
 
 
-def init_local_file(minio_path: str, temp_path: str | None, retrieve: bool):
+def init_local_file(config: dict, retrieve: bool):
     """
     If necessary, initialize the local file either by copying from MinIO or creating empty.
-    Returns path to the temporary file to use.
     """
 
-    if temp_path is not None:
-        # Already have temporary local file, no need to reload.
-        return temp_path
+    if config["handle"] is not None:
+        # Already have open local file.
+        return
 
-    # Get name of temporary file to use and create empty.
-    with tempfile.NamedTemporaryFile(mode="w+b", delete=False) as tf:
-        temp_path = tf.name
-        print("Using temporary path for local file:", temp_path)
+    temp_path = config["temp_path"]
+    minio_path = config["minio_path"]
 
     if retrieve:
-        # Replace that file name with temporary file from MinIO.
+        # Copy object from MinIO to temporary file.
+        print("Get local file from object in MinIO storage:", temp_path)
         copy_from_minio(minio_path, temp_path)
+        config["handle"] = open(temp_path, "+wb")
+    else:
+        # Create empty.
+        print("Create empty local file for object:", temp_path)
+        config["handle"] = open(temp_path, "+wb")
 
 
 def do_read(
-    minio_path: str,
-    temp_path: str,
+    config: dict,
     pipe_request: io.BufferedReader,
     pipe_response: io.BufferedWriter,
+    queue_out: mp.Queue,
 ) -> str:
     """
     Read input from file and send to output pipe.
     """
 
+    minio_path = config["minio_path"]
     print("Perform read operation on file:", minio_path)
     temp_path = init_local_file(minio_path, temp_path, True)
     print("Using temporary file:", temp_path)
@@ -213,16 +217,19 @@ def do_unlink(
 
 
 def handle_io_request(
-    minio_path: str,
     operation: str,
     file_pipe_in: str,
     file_pipe_out: str,
-    temp_path: str | None,
+    config: dict,
+    queue_out: mp.Queue,
 ) -> list:
     """
     Handle single I/O request.
     Returns list of objects to send on output queue.
     """
+
+    minio_path = config["minio_path"]
+    print(f"Do operation {operation} on path {minio_path}.")
 
     # Open the files for the queues.
     with (
@@ -231,22 +238,24 @@ def handle_io_request(
     ):
         # Handle the specified type of request.
         if operation == "read":
-            do_read(minio_path, temp_path, pipe_request, pipe_response)
+            do_read(config, pipe_request, pipe_response, queue_out)
         elif operation == "write":
-            do_write(minio_path, temp_path, pipe_request, pipe_response)
+            do_write(config, temp_path, pipe_request, pipe_response, queue_out)
         elif operation == "flush":
-            do_flush(file_state, pipe_response)
+            do_flush(config, pipe_response, queue_out)
         elif operation == "truncate":
-            do_truncate(file_state, pipe_request, pipe_response)
+            do_truncate(config, pipe_request, pipe_response, queue_out)
         elif operation == "create":
-            do_create(file_state, pipe_response)
+            do_create(config, pipe_response, queue_out)
             return False
         elif operation == "release":
-            do_release(file_state, pipe_response)
+            do_release(config, pipe_response, queue_out)
             return True
         elif operation == "unlink":
-            status["is_stateful"] = False
-            do_unlink(file_state, pipe_response)
+            do_unlink(config, pipe_response, queue_out)
             return True
         else:
             raise NotImplementedError(f"{request_type}: request_type")
+
+    # Indicate done.
+    queue_out.put({"is_done": True})

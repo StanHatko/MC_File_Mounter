@@ -187,23 +187,24 @@ def get_request_info(control_pipe: io.BufferedReader):
     return line.split("|", maxsplit=3)
 
 
-def object_process_get(
-    queue_in: mp.Queue,
-    config: dict,
-    is_open: bool,
-    write_out: bool,
-):
+def object_process_get(queue_in: mp.Queue, config: dict):
     """
     Get object for multiprocessing queue, with possibility of exit for timeout.
     """
 
     # If may need to write out, wait indefinitely for input.
-    if write_out:
+    if config["write_out"]:
         return queue_in.get()
 
-    # Wait in loop for required amount of time.
-    max_time = config["timeout_open_read"] if is_open else config["timeout_closed"]
+    # Get required amount of time.
+    max_time = (
+        config["timeout_open_read"]
+        if config["handle"] is not None
+        else config["timeout_closed"]
+    )
     start_time = time.time()
+
+    # Wait in loop for required amount of time, if no input by then timeout.
     while True:
         try:
             return queue_in.get(timeout=1)
@@ -236,14 +237,29 @@ def object_process(
     # Initialization
     pid = os.getpid()
     print(f"Running process {pid} for operation on object {minio_path}.")
-    temp_file = None
-    is_open = False
-    write_out = False
 
     with tempfile.TemporaryDirectory() as td:
-        # Main loop for process: get and handle requests.
-        while True:
-            req = object_process_get(queue_in, config, is_open, write_out)
+        config["minio_path"] = minio_path
+        config["write_out"] = False
+        config["temp_path"] = f"{td}/file.bin"
+        config["handle"] = None
+
+        try:
+            # Main loop for process: get and handle requests.
+            while True:
+                # Get request.
+                req = object_process_get(queue_in, config)
+
+                # Handle request.
+                handle_io_request(
+                    req["operation"],
+                    req["pipe_in"],
+                    req["pipe_out"],
+                    config,
+                    queue_out,
+                )
+        except TimeoutError:
+            print("Timeout occurred, exit.")
 
 
 def operation_process(
