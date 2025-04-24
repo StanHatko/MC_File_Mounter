@@ -13,6 +13,7 @@ import queue
 
 from implementations import handle_io_request
 
+
 # Operations that maintain file state.
 KEEP_STATE_OPS = [
     "read",
@@ -262,47 +263,13 @@ def object_process(
             print("Timeout occurred, exit.")
 
 
-def operation_process(
-    minio_path: str,
-    temp_path: str | None,
-    queue_in: mp.Queue,
-    queue_out: mp.Queue,
-):
-    """
-    Runs process for single operation.
-    Input and output via controller process done using the per-file queues.
-    Other input and output done via pipes filenames passed using input queue.
-    """
-
-    task = queue_in.get()
-    operation = task["operation"]
-    pipe_in = task["pipe_in"]
-    pipe_out = task["pipe_out"]
-    print(
-        (
-            f"Current operation is {operation}, with input pipe {pipe_in}, "
-            f"output pipe {pipe_out}, and temporary file {temp_path}."
-        )
-    )
-
-    output_data = handle_io_request(
-        minio_path,
-        operation,
-        pipe_in,
-        pipe_out,
-        temp_path,
-    )
-
-
 def start_operation(
     operation: str,
     pipe_in: io.BufferedReader,
     pipe_out: io.BufferedWriter,
     minio_path: str,
     config: dict,
-    processes_stateful: dict,
-    processes_stateless: dict,
-    metadata: dict,
+    objects_db: dict,
 ):
     """
     Start operation, do one of:
@@ -389,9 +356,7 @@ def main():
         "timeout_open_read": float(get_config_var("timeout_open_read")),
     }
     control_pipe_file = config["control_pipe"]
-    processes_file = {}
-    processes_path = {}
-    metadata = {}
+    objects_db = {}
 
     print("Handle requests with infinite loop...")
     op_num = 1
@@ -408,19 +373,10 @@ def main():
         )
 
         # Do the actual operation.
-        start_operation(
-            operation,
-            pipe_in,
-            pipe_out,
-            minio_path,
-            config,
-            processes_file,
-            processes_path,
-            metadata,
-        )
+        start_operation(operation, pipe_in, pipe_out, minio_path, config, objects_db)
 
         # Do cleanup as necessary.
-        clean_operations(config, processes)
+        clean_operations(config, objects_db)
         op_num += 1
 
 

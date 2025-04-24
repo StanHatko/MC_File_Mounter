@@ -49,12 +49,12 @@ def init_local_file(config: dict, retrieve: bool):
 
     if retrieve:
         # Copy object from MinIO to temporary file.
-        print("Get local file from object in MinIO storage:", temp_path)
-        copy_from_minio(minio_path, temp_path)
+        print(f"Copy to local file {temp_path} MinIO object {minio_path}.")
+        copy_from_minio(config, minio_path, temp_path)
         config["handle"] = open(temp_path, "+wb")
     else:
         # Create empty.
-        print("Create empty local file for object:", temp_path)
+        print(f"Create empty local file {temp_path} for MinIO object {minio_path}.")
         config["handle"] = open(temp_path, "+wb")
 
 
@@ -62,51 +62,53 @@ def do_read(
     config: dict,
     pipe_request: io.BufferedReader,
     pipe_response: io.BufferedWriter,
-    queue_out: mp.Queue,
-) -> str:
+):
     """
     Read input from file and send to output pipe.
     """
 
     minio_path = config["minio_path"]
-    print("Perform read operation on file:", minio_path)
-    temp_path = init_local_file(minio_path, temp_path, True)
-    print("Using temporary file:", temp_path)
+    temp_path = config["temp_file"]
+    print(
+        f"Perform read operation on file {minio_path}, using temporary path {temp_path}."
+    )
+    init_local_file(config, True)
 
     size = get_input_uint64(pipe_request)
     offset = get_input_uint64(pipe_request)
     print(f"Using size {size} and offset {offset}.")
 
     try:
-        with open(temp_path, "rb") as f:
-            f.seek(offset, os.SEEK_SET)
-            data = f.read(size)
+        f = config["handle"]
+        f.seek(offset, os.SEEK_SET)
+        data = f.read(size)
     except OSError as e:
-        print("Encountered error:", e)
+        print("Encountered error during read:", e)
         send_output_int8(pipe_response, -1)
-        return temp_path
+        return
 
     send_output_int8(pipe_response, 0)  # success status code
     length = len(data)
     send_output_uint64(pipe_response, length)
     pipe_response.write(data)
     print("Done the read operation.")
-    return temp_path
 
 
 def do_write(
-    minio_path: str,
-    temp_path: str,
+    config: dict,
     pipe_request: io.BufferedReader,
     pipe_response: io.BufferedWriter,
-) -> str:
+):
     """
     Write output to file, from input pipe.
     """
 
-    print("Perform write operation on file:", minio_path)
-    temp_path = init_local_file(minio_path, temp_path, True)
-    print("Using temporary file:", temp_path)
+    minio_path = config["minio_path"]
+    temp_path = config["temp_file"]
+    print(
+        f"Perform write operation on file {minio_path}, using temporary path {temp_path}."
+    )
+    init_local_file(config, True)  # if create new, create operation done before
 
     size = get_input_uint64(pipe_request)
     offset = get_input_uint64(pipe_request)
@@ -114,17 +116,14 @@ def do_write(
     print(f"Using size {size} and offset {offset}.")
 
     try:
-        file_state["handle"].seek(offset, os.SEEK_SET)
-        file_state["handle"].write(data)
-        ret_code = 0
+        f = config["handle"]
+        f.seek(offset, os.SEEK_SET)
+        f.write(data)
+        send_output_int8(pipe_response, 0)
+        print("Done the write operation.")
     except OSError as e:
-        print("Encountered error:", e)
-        ret_code = -1
-
-    file_state["write"] = True
-    send_output_int8(pipe_response, ret_code)
-    print("Done the write operation.")
-    return temp_path
+        print("Encountered error during write:", e)
+        send_output_int8(pipe_response, -1)
 
 
 def do_flush(
@@ -238,9 +237,9 @@ def handle_io_request(
     ):
         # Handle the specified type of request.
         if operation == "read":
-            do_read(config, pipe_request, pipe_response, queue_out)
+            do_read(config, pipe_request, pipe_response)
         elif operation == "write":
-            do_write(config, temp_path, pipe_request, pipe_response, queue_out)
+            do_write(config, pipe_request, pipe_response)
         elif operation == "flush":
             do_flush(config, pipe_response, queue_out)
         elif operation == "truncate":
@@ -257,5 +256,15 @@ def handle_io_request(
         else:
             raise NotImplementedError(f"{request_type}: request_type")
 
+    # Some cleanup.
+    try:
+        print("Remove no longer needed pipe:", file_pipe_in)
+        os.unlink(file_pipe_in)
+        print("Remove no longer needed pipe:", file_pipe_out)
+        os.unlink(file_pipe_out)
+    except OSError as e:
+        print("Error during cleanup pipes:", e)
+
     # Indicate done.
     queue_out.put({"is_done": True})
+    print(f"Done the {operation} operation.")
