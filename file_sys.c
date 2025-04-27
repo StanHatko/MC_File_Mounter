@@ -102,6 +102,26 @@ int open_domain_socket()
 	return fd;
 }
 
+#define OPEN_DOMAIN_SOCKET_CHECK_ERROR()            \
+	{                                               \
+		if (fd < 0)                                 \
+		{                                           \
+			perror("Could not open domain socket"); \
+			return -1; /* TODO adjust?*/            \
+		}                                           \
+	}
+
+#define SEND_WITH_CHECK_ERROR(var_send, len_send)          \
+	{                                                      \
+		int send_retval = send(fd, var_send, len_send, 0); \
+		if (send_retval < 0)                               \
+		{                                                  \
+			perror("Domain socket send failed");           \
+			close(fd);                                     \
+			return send_retval;                            \
+		}                                                  \
+	}
+
 // FUSE operation: access (check if file exists)
 static int do_access(const char *path, int perms)
 {
@@ -109,16 +129,11 @@ static int do_access(const char *path, int perms)
 	log_path("to access", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'A';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
 	recv(fd, &retval, sizeof(retval), 0); // TODO check error
@@ -143,16 +158,11 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	log_path("to flush", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'F';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
 	recv(fd, &retval, sizeof(retval), 0); // TODO check error
@@ -214,16 +224,11 @@ static int do_mkdir(const char *path, mode_t mode)
 	log_path("to mkdir", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'M';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
 	recv(fd, &retval, sizeof(retval), 0); // TODO check error
@@ -255,11 +260,7 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	log_path("to read", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'R';
 	send(fd, &cmd, 1, 0); // TODO check error
@@ -382,16 +383,11 @@ static int do_rmdir(const char *path)
 	log_path("directory to remove", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'D';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
 	recv(fd, &retval, sizeof(retval), 0); // TODO check error
@@ -407,18 +403,12 @@ static int do_truncate(const char *path, off_t new_size)
 	log_path("to truncate", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'T';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
-
-	send(fd, &new_size, sizeof(new_size), 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&new_size, sizeof(new_size));
 
 	int retval;
 	recv(fd, &retval, sizeof(retval), 0); // TODO check error
@@ -434,16 +424,11 @@ static int do_unlink(const char *path)
 	log_path("file to remove", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'U';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
 	recv(fd, &retval, sizeof(retval), 0); // TODO check error
@@ -459,11 +444,7 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 	log_path("to write", path);
 
 	int fd = open_domain_socket();
-	if (fd == -1)
-	{
-		perror("Could not open domain socket");
-		return -1; // TODO adjust?
-	}
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'W';
 	send(fd, &cmd, 1, 0); // TODO check error
