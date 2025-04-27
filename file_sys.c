@@ -69,7 +69,8 @@ const char *get_config_var(const char *var_name, int max_len)
 // Initialization function, sets up specified configuration from environment variables.
 void init_config()
 {
-	domain_socket_file = get_config_var("domain_socket_file", 100);
+	const char *ds = get_config_var("domain_socket_file", BUF_SIZE_DOMAIN_SOCKET);
+	strcpy(domain_socket_file, ds);
 }
 
 // Connect to domain socket.
@@ -101,13 +102,29 @@ int open_domain_socket()
 	return fd;
 }
 
-// FUSE operation: access
+// FUSE operation: access (check if file exists)
 static int do_access(const char *path, int perms)
 {
 	log_operation("access");
 	log_path("to access", path);
-	// TODO: implement null version of this?
-	return -1;
+
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
+
+	char cmd = 'A';
+	send(fd, &cmd, 1, 0); // TODO check error
+
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
+
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
+
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: chmod
@@ -125,19 +142,23 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	log_operation("flush");
 	log_path("to flush", path);
 
-	open_domain_socket(const char *domain_socket_file) char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
-	get_temp_file_base(temp_path_base);
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
 
-	// Send parameters what to write.
-	WRITE_OP_INPUT("path", path, strlen(path));
+	char cmd = 'F';
+	send(fd, &cmd, 1, 0); // TODO check error
 
-	// Send request and wait for response to become available.
-	CREATE_START_REQUEST();
-	wait_for_output(temp_path_base);
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
 
-	// TODO implement rest
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
 
-	return 0;
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: getattr
@@ -190,9 +211,25 @@ static int do_getattr(const char *path, struct stat *st)
 static int do_mkdir(const char *path, mode_t mode)
 {
 	log_operation("mkdir");
-	log_path("directory to create", path);
-	// TODO: REPLACE
-	return -1;
+	log_path("to mkdir", path);
+
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
+
+	char cmd = 'M';
+	send(fd, &cmd, 1, 0); // TODO check error
+
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
+
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
+
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: mknod
@@ -334,8 +371,24 @@ static int do_rmdir(const char *path)
 {
 	log_operation("rmdir");
 	log_path("directory to remove", path);
-	// TODO: implement
-	return -1;
+
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
+
+	char cmd = 'D';
+	send(fd, &cmd, 1, 0); // TODO check error
+
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
+
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
+
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: truncate
@@ -362,8 +415,24 @@ static int do_unlink(const char *path)
 {
 	log_operation("unlink");
 	log_path("file to remove", path);
-	// TODO: implement
-	return -1;
+
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
+
+	char cmd = 'U';
+	send(fd, &cmd, 1, 0); // TODO check error
+
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
+
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
+
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: write
