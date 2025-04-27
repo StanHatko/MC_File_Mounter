@@ -1,13 +1,17 @@
-[DRAFT] Implementation of Filesystem Mount for S3 Accessible with mc Command
+[DRAFT] Implementation of Filesystem Mount for Server with Multiple Backend Storage Systems
 =======================================
 
-This is an implementation of mounting a filesystem with FUSE for an S3-compatible folder accessible using the MinIO mc command.
+The goal of this project is to create a multithreaded FUSE-mounted filesystem that connects to a
+server supporting multiple configurable Python fsspec storage systems.
+
+Goal expanded from just supporting single S3-type type system.
+
 Based on sample FUSE repo https://github.com/MaaSTaaR/LSYSFS.
 Most of the actual methods haven't been implemented yet.
 
 License: GNU GPL.
 
-## Testing on Localhost
+## Testing on Localhost (OUTDATED)
 
 Download MinIO:
 
