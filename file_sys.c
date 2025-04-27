@@ -10,10 +10,96 @@
  */
 
 #define FUSE_USE_VERSION 35
-#include <fuse.h>
 
-#include "config.h"
-#include "file_sys_support.c"
+#include <errno.h>
+#include <fuse.h>
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <time.h>
+#include <unistd.h>
+
+// Maximum path length to domain socket file: must later fit into 108 char buffer.
+#define BUF_SIZE_DOMAIN_SOCKET 96
+
+// Name of domain socket file.
+char domain_socket_file[BUF_SIZE_DOMAIN_SOCKET];
+
+// Log operation that is performed.
+void log_operation(const char *op_name)
+{
+	printf("Perform operation: %s\n", op_name);
+}
+
+// Log path.
+void log_path(const char *name, const char *path)
+{
+	printf("Path %s: %s\n", name, path);
+}
+
+// Get and validate single configuration variable.
+const char *get_config_var(const char *var_name, int max_len)
+{
+	const char *contents = getenv(var_name);
+
+	if (contents == NULL)
+	{
+		printf("Must specify environment variable %s!\n", var_name);
+		exit(1);
+	}
+	printf("Using %s: %s\n", var_name, contents);
+
+	int nt = strlen(contents);
+	if (nt > max_len)
+	{
+		printf("Too long %s, maximum is %d, specified %d!", var_name, max_len, nt);
+		exit(1);
+	}
+
+	return contents;
+}
+
+// Initialization function, sets up specified configuration from environment variables.
+void init_config()
+{
+	domain_socket_file = get_config_var("domain_socket_file", 100);
+}
+
+// Connect to domain socket.
+int open_domain_socket()
+{
+	// Create the socket.
+	int fd = socket(PF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+	{
+		perror("Socket connection failed");
+		return -1;
+	}
+
+	// Create address in format usable by socket connect.
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strcpy(addr.sun_path, domain_socket_file); // source limited by BUF_SIZE_DOMAIN_SOCKET
+
+	// Connect to the domain socket file.
+	int conn_status = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+	if (conn_status < 0)
+	{
+		perror("Connect failed");
+		return -1;
+	}
+
+	// Return the socket obtained.
+	return fd;
+}
 
 // FUSE operation: access
 static int do_access(const char *path, int perms)
