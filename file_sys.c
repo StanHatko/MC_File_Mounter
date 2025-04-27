@@ -1,5 +1,5 @@
 /**
- * Mount file system that can be accessed using MinIO mc command.
+ * Mount file system that interfaces to potentially multiple Python fsspec-based backends.
  * For now still mostly sample code, need to implement methods.
  * By Stan Hatko
  *
@@ -38,7 +38,8 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 {
 	log_operation("flush");
 	log_path("to flush", path);
-	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
+
+	open_domain_socket(const char *domain_socket_file) char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
 	get_temp_file_base(temp_path_base);
 
 	// Send parameters what to write.

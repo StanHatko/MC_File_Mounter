@@ -1,5 +1,5 @@
 /**
- * Internal support functions for MinIO-mc mounting program.
+ * Internal support functions for FUSE mounting program.
  * By Stan Hatko
  *
  * License: GNU GPL
@@ -12,18 +12,46 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "config.h"
 
-// Prefix of temporary files path.
-const char *temp_files_prefix;
+// Name of domain socket file.
+const char *domain_socket_file;
 
-// Prefix of MinIO data files path.
-const char *mc_data_prefix;
+// Connect to domain socket.
+int open_domain_socket()
+{
+    // Create the socket.
+    int fd = socket(PF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0)
+    {
+        perror("Socket connection failed");
+        return -1;
+    }
+
+    // Create address in format usable by socket connect.
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, domain_socket_file); // check strlen is at most 107 characters
+
+    // Connect to the domain socket file.
+    int conn_status = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+    if (conn_status < 0)
+    {
+        perror("Connect failed");
+        return -1;
+    }
+
+    // Return the socket obtained.
+    return fd;
+}
 
 // Get number that should be used for new temporary file.
 uint64_t get_temp_file_num()
@@ -34,12 +62,6 @@ uint64_t get_temp_file_num()
     cur_num += 1;
     pthread_mutex_unlock(&lock);
     return cur_num;
-}
-
-// Get base name to use for temporary file.
-void get_temp_file_base(char *buf)
-{
-    sprintf(buf, "%s_%" PRIu64 "_data", temp_files_prefix, get_temp_file_num());
 }
 
 // Log operation that is performed.
@@ -79,7 +101,7 @@ const char *get_config_var(const char *var_name, int max_len)
 // Initialization function, sets up specified configuration from environment variables.
 void init_config()
 {
-    temp_files_prefix = get_config_var("temp_files_prefix", TEMP_PATH_BUF_BASE_SIZE - 64);
+    domain_socket_file = get_config_var("domain_socket_file", 100);
 }
 
 // Function that waits for output to become available.
