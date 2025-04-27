@@ -111,26 +111,36 @@ int open_domain_socket()
 		}                                           \
 	}
 
-#define SEND_WITH_CHECK_ERROR(var_send, len_send)          \
-	{                                                      \
-		int send_retval = send(fd, var_send, len_send, 0); \
-		if (send_retval < 0)                               \
-		{                                                  \
-			perror("Domain socket send failed");           \
-			close(fd);                                     \
-			return send_retval;                            \
-		}                                                  \
+#define SEND_WITH_CHECK_ERROR(var_send, len_send)                     \
+	{                                                                 \
+		ssize_t send_retval = send(fd, var_send, len_send, 0);        \
+		if (send_retval < 0)                                          \
+		{                                                             \
+			perror("Domain socket send failed");                      \
+			close(fd);                                                \
+			return send_retval;                                       \
+		}                                                             \
+		if (send_retval < len_send)                                   \
+		{                                                             \
+			perror("Domain socket send unable to send enough bytes"); \
+			return -1; /*TODO adjust*/                                \
+		}                                                             \
 	}
 
-#define RECV_WITH_CHECK_ERROR(var_recv, len_recv)          \
-	{                                                      \
-		int recv_retval = recv(fd, var_recv, len_recv, 0); \
-		if (recv_retval < 0)                               \
-		{                                                  \
-			perror("Domain socket recv failed");           \
-			close(fd);                                     \
-			return recv_retval;                            \
-		}                                                  \
+#define RECV_ALL_WITH_CHECK_ERROR(var_recv, len_recv)              \
+	{                                                              \
+		ssize_t recv_retval = recv(fd, var_recv, len_recv, 0);     \
+		if (recv_retval < 0)                                       \
+		{                                                          \
+			perror("Domain socket recv failed");                   \
+			close(fd);                                             \
+			return recv_retval;                                    \
+		}                                                          \
+		if (recv_retval < len_recv)                                \
+		{                                                          \
+			perror("Domain socket recv did not get enough bytes"); \
+			return -1; /*TODO adjust*/                             \
+		}                                                          \
 	}
 
 // FUSE operation: access (check if file exists)
@@ -147,7 +157,7 @@ static int do_access(const char *path, int perms)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -167,7 +177,7 @@ static int do_chmod(const char *path, mode_t mode)
 	SEND_WITH_CHECK_ERROR(&mode, sizeof(mode_t));
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -188,7 +198,7 @@ static int do_chown(const char *path, uid_t uid, gid_t gid)
 	SEND_WITH_CHECK_ERROR(&gid, sizeof(gid_t));
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -208,7 +218,7 @@ static int do_create(const char *path, mode_t mode, dev_t rdev)
 	SEND_WITH_CHECK_ERROR(&mode, sizeof(mode_t));
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -227,7 +237,7 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -246,7 +256,7 @@ static int do_getattr(const char *path, struct stat *st)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	if (retval < 0)
 	{
 		perror("Underlying getattr failed");
@@ -254,15 +264,15 @@ static int do_getattr(const char *path, struct stat *st)
 		return retval;
 	}
 
-	RECV_WITH_CHECK_ERROR(&st->st_uid, sizeof(st->st_uid)); // owner
-	RECV_WITH_CHECK_ERROR(&st->st_gid, sizeof(st->st_gid)); // group of owner
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_uid, sizeof(st->st_uid)); // owner
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_gid, sizeof(st->st_gid)); // group of owner
 
-	RECV_WITH_CHECK_ERROR(&st->st_atime, sizeof(st->st_atime)); // access time
-	RECV_WITH_CHECK_ERROR(&st->st_mtime, sizeof(st->st_mtime)); // modification time
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_atime, sizeof(st->st_atime)); // access time
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_mtime, sizeof(st->st_mtime)); // modification time
 
-	RECV_WITH_CHECK_ERROR(&st->st_mode, sizeof(st->st_mode));	// mode of file
-	RECV_WITH_CHECK_ERROR(&st->st_nlink, sizeof(st->st_nlink)); // number of links
-	RECV_WITH_CHECK_ERROR(&st->st_size, sizeof(st->st_size));	// size (set to 0 for directories)
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_mode, sizeof(st->st_mode));	// mode of file
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_nlink, sizeof(st->st_nlink)); // number of links
+	RECV_ALL_WITH_CHECK_ERROR(&st->st_size, sizeof(st->st_size));	// size (set to 0 for directories)
 
 	close(fd);
 	return 0;
@@ -282,7 +292,7 @@ static int do_mkdir(const char *path, mode_t mode)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -301,7 +311,7 @@ static int do_open(const char *path, struct fuse_file_info *info)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -321,8 +331,8 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	SEND_WITH_CHECK_ERROR(&size, sizeof(size));
 	SEND_WITH_CHECK_ERROR(&offset, sizeof(offset));
 
-	int bytes_read;
-	RECV_WITH_CHECK_ERROR(&bytes_read, sizeof(bytes_read));
+	ssize_t bytes_read;
+	RECV_ALL_WITH_CHECK_ERROR(&bytes_read, sizeof(bytes_read));
 	if (bytes_read < 0)
 	{
 		perror('Underlying read operation failed');
@@ -330,7 +340,7 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 		return bytes_read;
 	}
 
-	RECV_WITH_CHECK_ERROR(&buffer, bytes_read);
+	RECV_ALL_WITH_CHECK_ERROR(&buffer, bytes_read);
 	close(fd);
 	return bytes_read;
 }
@@ -353,7 +363,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	SEND_WITH_CHECK_ERROR(&offset, sizeof(offset));
 
 	int num_entries;
-	RECV_WITH_CHECK_ERROR(&num_entries, sizeof(num_entries));
+	RECV_ALL_WITH_CHECK_ERROR(&num_entries, sizeof(num_entries));
 	if (num_entries < 0)
 	{
 		perror('Underlying readdir operation failed');
@@ -364,7 +374,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 	for (int i = 0; i < num_entries; i++)
 	{
 		short path_len;
-		RECV_WITH_CHECK_ERROR(&path_len, sizeof(path_len));
+		RECV_ALL_WITH_CHECK_ERROR(&path_len, sizeof(path_len));
 
 		// Calloc initializes so guaranteed to be null-terminated.
 		char *entry_path = calloc(path_len + 1, 1);
@@ -410,7 +420,7 @@ static int do_release(const char *path, struct fuse_file_info *info)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -431,7 +441,7 @@ static int do_rename(const char *source_path, const char *dest_path)
 	SEND_WITH_CHECK_ERROR(dest_path, strlen(dest_path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -450,7 +460,7 @@ static int do_rmdir(const char *path)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -470,7 +480,7 @@ static int do_truncate(const char *path, off_t new_size)
 	SEND_WITH_CHECK_ERROR(&new_size, sizeof(new_size));
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -489,7 +499,7 @@ static int do_unlink(const char *path)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -511,7 +521,7 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 	SEND_WITH_CHECK_ERROR(buffer, size);
 
 	int retval;
-	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	RECV_ALL_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }

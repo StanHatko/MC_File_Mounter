@@ -4,6 +4,8 @@
 The goal of this project is to create a multithreaded FUSE-mounted filesystem that connects to a
 server supporting multiple configurable Python fsspec storage systems.
 
+This is focused primarily on accessing objects as files on S3-type systems,
+with potentially multiple backend file servers for different subdirectories.
 Goal expanded from just supporting single S3-type type system.
 
 Based on sample FUSE repo https://github.com/MaaSTaaR/LSYSFS.
