@@ -172,6 +172,27 @@ static int do_chmod(const char *path, mode_t mode)
 	return retval;
 }
 
+// FUSE operation: chown
+static int do_chown(const char *path, uid_t uid, gid_t gid)
+{
+	log_operation("chown");
+	log_path("to chmod", path);
+
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'I';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&uid, sizeof(uid_t));
+	SEND_WITH_CHECK_ERROR(&gid, sizeof(gid_t));
+
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	close(fd);
+	return retval;
+}
+
 // FUSE operation: create
 static int do_create(const char *path, mode_t mode, dev_t rdev)
 {
@@ -266,6 +287,25 @@ static int do_mkdir(const char *path, mode_t mode)
 	return retval;
 }
 
+// FUSE operation: open
+static int do_open(const char *path, struct fuse_file_info *info)
+{
+	log_operation("open");
+	log_path("to open", path);
+
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'O';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	close(fd);
+	return retval;
+}
+
 // FUSE operation: read
 static int do_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi)
 {
@@ -321,54 +361,36 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 		return num_entries;
 	}
 
-		// Adjust path for MinIO mc ls operation.
-	char minio_path[4 * MAX_PATH_LEN];
-	sprintf(minio_path, "\"%s%s\"", mc_data_prefix, path);
-
-	// Send parameters of directory to list.
-	WRITE_OP_INPUT("path", minio_path, strlen(minio_path));
-
-	// Send request and wait for response to become available.
-	CREATE_START_REQUEST();
-	wait_for_output(temp_path_base);
-
-	// Get list of files in the directory.
-	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
-	sprintf(temp_path_out, "%s.out", temp_path_base);
-
-	FILE *fr = fopen(temp_path_out, "r");
-	if (fr == NULL)
-		return -1; // TODO adjust
-
-	while (true)
+	for (int i = 0; i < num_entries; i++)
 	{
-		char s[MAX_PATH_LEN];
-		fgets(s, MAX_PATH_LEN - 1, fr);
+		short path_len;
+		RECV_WITH_CHECK_ERROR(&path_len, sizeof(path_len));
 
-		if (ferror(fr))
+		// Calloc initializes so guaranteed to be null-terminated.
+		char *entry_path = calloc(path_len + 1, 1);
+		if (entry_path == NULL)
 		{
-			fclose(fr);
-			return -1; // TODO adjust
+			perror('Allocate memory failed');
+			return -ENOMEM;
 		}
 
-		// If end of file occurred, done.
-		if (feof(fr))
+		int recv_status = recv(fd, entry_path, path_len, 0);
+		if (recv_status < 0)
 		{
-			fclose(fr);
-			break;
+			perror("Operation recv to get path failed");
+			free(entry_path);
+			return recv_status;
 		}
-
-		// Remove trailing newline, by replacing with null character.
-		char *ch = s;
-		while (*ch != 0)
+		if (recv_status != path_len)
 		{
-			if (*ch == '\n')
-				*ch = 0;
-			ch++;
+			perror("Operation recv to get path did not get enough bytes");
+			free(entry_path);
+			return -EIO;
 		}
 
 		// Add file or directory to list.
-		filler(buffer, s, NULL, 0);
+		filler(buffer, entry_path, NULL, 0);
+		free(entry_path);
 	}
 
 	return 0;
@@ -379,8 +401,18 @@ static int do_release(const char *path, struct fuse_file_info *info)
 {
 	log_operation("release");
 	log_path("to close file", path);
-	// TODO: implement
-	return 0;
+
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'X';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: rename
@@ -389,9 +421,19 @@ static int do_rename(const char *source_path, const char *dest_path)
 	log_operation("rename");
 	log_path("source file", source_path);
 	log_path("destination file", dest_path);
-	// TODO: implement
-	// Not real rename with mc commands!
-	return -1;
+
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'N';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(source_path, strlen(source_path) + 1);
+	SEND_WITH_CHECK_ERROR(dest_path, strlen(dest_path) + 1);
+
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: rmdir
@@ -478,10 +520,12 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 static struct fuse_operations operations = {
 	.access = do_access,
 	.chmod = do_chmod,
+	.chown = do_chown,
 	.create = do_create,
 	.flush = do_flush,
 	.getattr = do_getattr,
 	.mkdir = do_mkdir,
+	.open = do_open,
 	.read = do_read,
 	.readdir = do_readdir,
 	.rename = do_rename,
