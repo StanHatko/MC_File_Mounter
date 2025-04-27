@@ -122,6 +122,17 @@ int open_domain_socket()
 		}                                                  \
 	}
 
+#define RECV_WITH_CHECK_ERROR(var_recv, len_recv)          \
+	{                                                      \
+		int recv_retval = recv(fd, var_recv, len_recv, 0); \
+		if (recv_retval < 0)                               \
+		{                                                  \
+			perror("Domain socket recv failed");           \
+			close(fd);                                     \
+			return recv_retval;                            \
+		}                                                  \
+	}
+
 // FUSE operation: access (check if file exists)
 static int do_access(const char *path, int perms)
 {
@@ -136,8 +147,7 @@ static int do_access(const char *path, int perms)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -147,8 +157,39 @@ static int do_chmod(const char *path, mode_t mode)
 {
 	log_operation("chmod");
 	log_path("to chmod", path);
-	// No-op implementation.
-	return 0;
+
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'M';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&mode, sizeof(mode_t));
+
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	close(fd);
+	return retval;
+}
+
+// FUSE operation: create
+static int do_create(const char *path, mode_t mode, dev_t rdev)
+{
+	log_operation("create");
+	log_path("to create", path);
+
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'C';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&mode, sizeof(mode_t));
+
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: flush
@@ -165,8 +206,7 @@ static int do_flush(const char *path, struct fuse_file_info *info)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -176,45 +216,35 @@ static int do_getattr(const char *path, struct stat *st)
 {
 	log_operation("getattr");
 	log_path("to get attributes", path);
-	// TODO: REPLACE with get real info from MinIO
 
-	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
-	st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
-	st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
-	st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
+	char cmd = 'G';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
-	if (strcmp(path, "/") == 0) // TODO: ADD support for subdirectories
+	int retval;
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
+	if (retval < 0)
 	{
-		st->st_mode = 040777;
-		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-	}
-	else
-	{
-		st->st_mode = 0100777;
-		st->st_nlink = 1;
-		st->st_size = 1024;
+		perror("Underlying getattr failed");
+		close(fd);
+		return retval;
 	}
 
+	RECV_WITH_CHECK_ERROR(&st->st_uid, sizeof(st->st_uid)); // owner
+	RECV_WITH_CHECK_ERROR(&st->st_gid, sizeof(st->st_gid)); // group of owner
+
+	RECV_WITH_CHECK_ERROR(&st->st_atime, sizeof(st->st_atime)); // access time
+	RECV_WITH_CHECK_ERROR(&st->st_mtime, sizeof(st->st_mtime)); // modification time
+
+	RECV_WITH_CHECK_ERROR(&st->st_mode, sizeof(st->st_mode));	// mode of file
+	RECV_WITH_CHECK_ERROR(&st->st_nlink, sizeof(st->st_nlink)); // number of links
+	RECV_WITH_CHECK_ERROR(&st->st_size, sizeof(st->st_size));	// size (set to 0 for directories)
+
+	close(fd);
 	return 0;
-
-#if 0
-	if (strcmp(path, "/") == 0 || is_dir(path) == 1)
-	{
-		st->st_mode = 0100777;
-		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-	}
-	else if (is_file(path) == 1)
-	{
-		st->st_mode = 040777;
-		st->st_nlink = 1;
-		st->st_size = 1024;
-	}
-	else
-	{
-		return -ENOENT;
-	}
-#endif
 }
 
 // FUSE operation: mkdir
@@ -231,26 +261,9 @@ static int do_mkdir(const char *path, mode_t mode)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
-}
-
-// FUSE operation: mknod
-static int do_mknod(const char *path, mode_t mode, dev_t rdev)
-{
-	log_operation("mknod");
-	log_path("to create", path);
-	// TODO: IMPLEMENT
-	return -1;
-#if 0
-	// Sample implementation.
-	path++;
-	add_file(path);
-
-	return 0;
-#endif
 }
 
 // FUSE operation: read
@@ -263,47 +276,52 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'R';
-	send(fd, &cmd, 1, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&size, sizeof(size));
+	SEND_WITH_CHECK_ERROR(&offset, sizeof(offset));
 
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
-
-	send(fd, &size, sizeof(size), 0); // TODO check error
-
-	send(fd, &offset, sizeof(offset), 0); // TODO check error
-
-	int actual_read;
-	int recv_retval = recv(fd, &actual_read, sizeof(actual_read), 0);
-	if (recv_retval < 0)
+	int bytes_read;
+	RECV_WITH_CHECK_ERROR(&bytes_read, sizeof(bytes_read));
+	if (bytes_read < 0)
 	{
-		perror('recv failed');
+		perror('Underlying read operation failed');
 		close(fd);
-		return recv_retval;
-	}
-	if (actual_read < 0)
-	{
-		perror('Read failed');
-		close(fd);
-		return -1; // TODO adjust
+		return bytes_read;
 	}
 
-	int recv_retval_2 = recv(fd, buffer, actual_read, 0);
-
+	RECV_WITH_CHECK_ERROR(&buffer, bytes_read);
 	close(fd);
-	return actual_read;
+	return bytes_read;
 }
 
-// FUSE operation: readdir
+// FUSE operation: readdir (get directory listing)
 static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
 	log_operation("readdir");
 	log_path("list contents", path);
-	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
-	get_temp_file_base(temp_path_base);
 
 	filler(buffer, ".", NULL, 0);  // Current Directory
 	filler(buffer, "..", NULL, 0); // Parent Directory
 
-	// Adjust path for MinIO mc ls operation.
+	int fd = open_domain_socket();
+	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
+
+	char cmd = 'L';
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&offset, sizeof(offset));
+
+	int num_entries;
+	RECV_WITH_CHECK_ERROR(&num_entries, sizeof(num_entries));
+	if (num_entries < 0)
+	{
+		perror('Underlying readdir operation failed');
+		close(fd);
+		return num_entries;
+	}
+
+		// Adjust path for MinIO mc ls operation.
 	char minio_path[4 * MAX_PATH_LEN];
 	sprintf(minio_path, "\"%s%s\"", mc_data_prefix, path);
 
@@ -390,8 +408,7 @@ static int do_rmdir(const char *path)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -411,8 +428,7 @@ static int do_truncate(const char *path, off_t new_size)
 	SEND_WITH_CHECK_ERROR(&new_size, sizeof(new_size));
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -431,8 +447,7 @@ static int do_unlink(const char *path)
 	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -447,19 +462,14 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 	OPEN_DOMAIN_SOCKET_CHECK_ERROR();
 
 	char cmd = 'W';
-	send(fd, &cmd, 1, 0); // TODO check error
-
-	send(fd, path, strlen(path) + 1, 0); // TODO check error
-
-	send(fd, &size, sizeof(size), 0); // TODO check error
-
-	send(fd, &offset, sizeof(offset), 0); // TODO check error
-
-	send(fd, buffer, size, 0); // TODO check error
+	SEND_WITH_CHECK_ERROR(&cmd, 1);
+	SEND_WITH_CHECK_ERROR(path, strlen(path) + 1);
+	SEND_WITH_CHECK_ERROR(&size, sizeof(size));
+	SEND_WITH_CHECK_ERROR(&offset, sizeof(offset));
+	SEND_WITH_CHECK_ERROR(buffer, size);
 
 	int retval;
-	recv(fd, &retval, sizeof(retval), 0); // TODO check error
-
+	RECV_WITH_CHECK_ERROR(&retval, sizeof(retval));
 	close(fd);
 	return retval;
 }
@@ -468,10 +478,10 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 static struct fuse_operations operations = {
 	.access = do_access,
 	.chmod = do_chmod,
+	.create = do_create,
 	.flush = do_flush,
 	.getattr = do_getattr,
 	.mkdir = do_mkdir,
-	.mknod = do_mknod,
 	.read = do_read,
 	.readdir = do_readdir,
 	.rename = do_rename,
