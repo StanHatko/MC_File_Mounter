@@ -253,33 +253,42 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 {
 	log_operation("read");
 	log_path("to read", path);
-	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
-	char param_str[MAX_INT_LEN];
-	get_temp_file_base(temp_path_base);
 
-	// Send parameters what to read.
-	sprintf(param_str, "%zu", size);
-	WRITE_OP_INPUT("size", &param_str, strlen(param_str));
-	sprintf(param_str, "%zu", offset);
-	WRITE_OP_INPUT("offset", &param_str, strlen(param_str));
-	WRITE_OP_INPUT("path", path, strlen(path));
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
 
-	// Send request and wait for response to become available.
-	CREATE_START_REQUEST();
-	wait_for_output(temp_path_base);
+	char cmd = 'R';
+	send(fd, &cmd, 1, 0); // TODO check error
 
-	// Get response (exact contents to read in temp file) and save to buffer.
-	char temp_path_out[TEMP_PATH_BUF_FULL_SIZE];
-	sprintf(temp_path_out, "%s.out", temp_path_base);
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
 
-	FILE *fr = fopen(temp_path_out, "rb");
-	if (fr == NULL)
+	send(fd, &size, sizeof(size), 0); // TODO check error
+
+	send(fd, &offset, sizeof(offset), 0); // TODO check error
+
+	int actual_read;
+	int recv_retval = recv(fd, &actual_read, sizeof(actual_read), 0);
+	if (recv_retval < 0)
+	{
+		perror('recv failed');
+		close(fd);
+		return recv_retval;
+	}
+	if (actual_read < 0)
+	{
+		perror('Read failed');
+		close(fd);
 		return -1; // TODO adjust
+	}
 
-	int bytes_read = fread(buffer, size, 0, fr);
-	fclose(fr);
+	int recv_retval_2 = recv(fd, buffer, actual_read, 0);
 
-	return bytes_read;
+	close(fd);
+	return actual_read;
 }
 
 // FUSE operation: readdir
@@ -396,18 +405,26 @@ static int do_truncate(const char *path, off_t new_size)
 {
 	log_operation("truncate");
 	log_path("to truncate", path);
-	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
-	get_temp_file_base(temp_path_base);
 
-	// Send parameters what to resize to.
-	WRITE_OP_INPUT("path", path, strlen(path));
-	WRITE_OP_INPUT("size", &new_size, sizeof(off_t));
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
 
-	// Send request and wait for response to become available.
-	CREATE_START_REQUEST();
-	wait_for_output(temp_path_base);
+	char cmd = 'T';
+	send(fd, &cmd, 1, 0); // TODO check error
 
-	return 0;
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
+
+	send(fd, &new_size, sizeof(new_size), 0); // TODO check error
+
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
+
+	close(fd);
+	return retval;
 }
 
 // FUSE operation: unlink
@@ -440,21 +457,30 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 {
 	log_operation("write");
 	log_path("to write", path);
-	char temp_path_base[TEMP_PATH_BUF_BASE_SIZE];
-	get_temp_file_base(temp_path_base);
 
-	// Send parameters what to write.
-	WRITE_OP_INPUT("size", &size, sizeof(size_t));
-	WRITE_OP_INPUT("offset", &offset, sizeof(size_t));
-	WRITE_OP_INPUT("path", path, strlen(path));
-	WRITE_OP_INPUT("buffer", buffer, size);
+	int fd = open_domain_socket();
+	if (fd == -1)
+	{
+		perror("Could not open domain socket");
+		return -1; // TODO adjust?
+	}
 
-	// Send request and wait for response to become available.
-	CREATE_START_REQUEST();
-	wait_for_output(temp_path_base);
+	char cmd = 'W';
+	send(fd, &cmd, 1, 0); // TODO check error
 
-	// Always writes size bytes, if did not then failure indicated earlier.
-	return size;
+	send(fd, path, strlen(path) + 1, 0); // TODO check error
+
+	send(fd, &size, sizeof(size), 0); // TODO check error
+
+	send(fd, &offset, sizeof(offset), 0); // TODO check error
+
+	send(fd, buffer, size, 0); // TODO check error
+
+	int retval;
+	recv(fd, &retval, sizeof(retval), 0); // TODO check error
+
+	close(fd);
+	return retval;
 }
 
 // Structure with functions for necessary operations.
