@@ -14,13 +14,13 @@ import tempfile
 import fsspec
 
 
-def get_path(self) -> str:
+def get_path(rfile: io.BufferedIOBase) -> str:
     """
     Get null-terminated UTF-8 path from input.
     """
     r = []
     while True:
-        ch = self.rfile.read(1)
+        ch = rfile.read(1)
         if ch == 0:
             return b"".join(r).decode("UTF-8")
         r.append(ch)
@@ -33,7 +33,7 @@ def handler_process(manager, rfile: io.BufferedIOBase, timeout: float):
 
     # Get type of request and on which path.
     action = rfile.read(1)
-    path = get_path()
+    path = get_path(rfile)
     print(f"Perform operation {action} on {path}.")
 
     # TODO
