@@ -14,6 +14,12 @@ import tempfile
 import fsspec
 
 
+def send_metadata():
+    """
+    Send metadata object in format server expects.
+    """
+
+
 class FileSocketServer(socketserver.StreamRequestHandler):
     """
     Class that responds to requests from FUSE connector and sends to Python processes.
@@ -33,7 +39,8 @@ class FileSocketServer(socketserver.StreamRequestHandler):
             r.append(ch)
 
     def get_cached_metadata(self, path: str) -> bool:
-        TODO
+        if path in objects_db:
+            return
 
     def send_object_process(action, action: bytes, path: str) -> bool:
         TODO
